@@ -1,0 +1,28 @@
+name: CI Checks
+
+env:
+  bashPass: \033[32;1mPASSED -
+  bashInfo: \033[33;1mINFO -
+  bashFail: \033[31;1mFAILED -
+  bashEnd:  \033[0m
+
+on:
+    push:
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+  Formatting:
+    name: Run Formatting Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: CreateArtifacts
+      run: |
+        echo "Hello world new one" > tamp.txt
+        zip myartifact.zip temp.txt
+        
+    - name: UploadArtifacts
+      uses: AniruddhaKanhere/FreeRTOS/artifact-backup@testbranch
+      with:
+        release_tag: v1.0.0
+        artifact_path: myartifact.zip
