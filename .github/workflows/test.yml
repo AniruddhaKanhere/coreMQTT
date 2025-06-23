@@ -20,7 +20,7 @@ jobs:
     steps:
     - name: CreateArtifacts
       run: |
-        echo "Hello world new one" > tamp.txt
+        echo "Hello world new one" > temp.txt
         zip myartifact.zip temp.txt
         
     - name: UploadArtifacts
