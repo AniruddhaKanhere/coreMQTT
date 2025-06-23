@@ -1,4 +1,4 @@
-name: CI Checks
+name: CI Checks new
 
 env:
   bashPass: \033[32;1mPASSED -
@@ -13,7 +13,9 @@ on:
 
 jobs:
   Formatting:
-    name: Run Formatting Check
+    permissions:
+      id-token: write
+    name: Create and upload artifacts
     runs-on: ubuntu-latest
     steps:
     - name: CreateArtifacts
