@@ -307,6 +307,13 @@ jobs:
     name: Create Release and Upload Release Asset
     runs-on: ubuntu-latest
     steps:
+      - name: List files
+        run: |
+          ls
+          ls -al
+          pwd
+          ls zip-check/
+          ls -al zip-check/
       - name: Backup Release Asset
         uses: FreeRTOS/CI-CD-Github-Actions/artifact-backup@main
         with:
