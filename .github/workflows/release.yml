@@ -312,8 +312,10 @@ jobs:
           ls
           ls -al
           pwd
-          ls zip-check/
-          ls -al zip-check/
+      - name: Download ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.repository_zip_name }}
       - name: Backup Release Asset
         uses: FreeRTOS/CI-CD-Github-Actions/artifact-backup@main
         with:
