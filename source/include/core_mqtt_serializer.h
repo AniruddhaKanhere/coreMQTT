@@ -1822,6 +1822,435 @@ MQTTStatus_t MQTT_ValidateConnectProperties( const MQTTPropBuilder_t * pProperty
 /* @[declare_mqtt_validateconnectproperties] */
 
 /**
+ * @brief Adds a Subscription Identifier property to the MQTT property builder.
+ *
+ * This function adds a Subscription Identifier property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure where
+ *                                the Subscription Identifier will be added.
+ *                                Must not be NULL.
+ * @param[in] subscriptionId The Subscription Identifier value to be added.
+ *                          Must be greater than 0.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Subscription Identifier was successfully added
+ * - #MQTTBadParameter if pPropertyBuilder is NULL or subscriptionId is 0
+ * - #MQTTNoMemory if the property builder has insufficient space
+ *
+ * <b>Example</b>
+ * @code{c}
+ * // Variables used in this example.
+ * MQTTStatus_t status;
+ * MQTTPropBuilder_t propertyBuilder ; // Assume this is initialized properly
+ * size_t subscriptionId = 12345;
+ *
+ * // Add Subscription Identifier to property builder
+ * status = MQTTPropAdd_SubscribeId(&propertyBuilder, subscriptionId);
+ *
+ * if(status == MQTTSuccess)
+ * {
+ *     // Subscription Identifier successfully added
+ * }
+ * @endcode
+ *
+ * @note This property is only valid for MQTT v5.0 and above.
+ * @note The Subscription Identifier can be used in SUBSCRIBE packets and
+ *       will be returned in matched PUBLISH packets.
+ */
+
+/* @[declare_mqttpropadd_subscribeid] */
+MQTTStatus_t MQTTPropAdd_SubscribeId( MQTTPropBuilder_t* pPropertyBuilder,
+                                      size_t subscriptionId,
+                                      const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_subscribeid] */
+
+/**
+ * @brief Adds User Property to the MQTT property builder.
+ *
+ * This function adds User Property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  userProperty       The User Property to be added.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Subscription Identifier was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_userprop] */
+MQTTStatus_t MQTTPropAdd_UserProp( MQTTPropBuilder_t* pPropertyBuilder,
+                                   const MQTTUserProperty_t* userProperty,
+                                   const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_userprop] */
+
+/**
+ * @brief Adds Session Expiry Interval property to the MQTT property builder.
+ *
+ * This function adds Session Expiry Interval property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  sessionExpiry     The Session Expiry Interval in seconds.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Session Expiry Interval was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_sessionexpiry] */
+MQTTStatus_t MQTTPropAdd_SessionExpiry( MQTTPropBuilder_t* pPropertyBuilder,
+                                        uint32_t sessionExpiry,
+                                        const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_sessionexpiry] */
+
+/**
+ * @brief Adds Receive Maximum property to the MQTT property builder.
+ *
+ * This function adds Receive Maximum property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in] receiveMax The maximum number of QoS 1 and QoS 2 messages allowed to be
+ *             received simultaneously.
+ * @param[in] pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Receive Maximum was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_connreceivemax] */
+MQTTStatus_t MQTTPropAdd_ConnReceiveMax( MQTTPropBuilder_t* pPropertyBuilder,
+                                         uint16_t receiveMax,
+                                         const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_connreceivemax] */
+
+/**
+ * @brief Adds Maximum Packet Size property to the MQTT property builder.
+ *
+ * This function adds Maximum Packet Size property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  maxPacketSize     The maximum packet size the client is willing to accept.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Maximum Packet Size was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_connmaxpacketsize] */
+MQTTStatus_t MQTTPropAdd_ConnMaxPacketSize( MQTTPropBuilder_t* pPropertyBuilder,
+                                            uint32_t maxPacketSize,
+                                            const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_connmaxpacketsize] */
+
+/**
+ * @brief Adds Topic Alias Maximum property to the MQTT property builder.
+ *
+ * This function adds Topic Alias Maximum property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  topicAliasMax     The maximum value of topic alias accepted by the client.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Topic Alias Maximum was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_conntopicaliasmax] */
+MQTTStatus_t MQTTPropAdd_ConnTopicAliasMax( MQTTPropBuilder_t* pPropertyBuilder,
+                                            uint16_t topicAliasMax,
+                                            const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_conntopicaliasmax] */
+
+/**
+ * @brief Adds Request Response Information property to the MQTT property builder.
+ *
+ * This function adds Request Response Information property to the property builder.
+ *
+ * @param[out] pPropertyBuilder       Pointer to the property builder structure.
+ * @param[in]  requestResponseInfo    Boolean indicating whether response information is requested.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Request Response Information was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_connrequestrespinfo] */
+MQTTStatus_t MQTTPropAdd_ConnRequestRespInfo( MQTTPropBuilder_t* pPropertyBuilder,
+                                              bool requestResponseInfo,
+                                              const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_connrequestrespinfo] */
+
+/**
+ * @brief Adds Request Problem Information property to the MQTT property builder.
+ *
+ * This function adds Request Problem Information property to the property builder.
+ *
+ * @param[out] pPropertyBuilder       Pointer to the property builder structure.
+ * @param[in]  requestProblemInfo    Boolean indicating whether problem information is requested.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Request Problem Information was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_connrequestprobinfo] */
+MQTTStatus_t MQTTPropAdd_ConnRequestProbInfo( MQTTPropBuilder_t* pPropertyBuilder,
+                                              bool requestProblemInfo,
+                                              const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_connrequestprobinfo] */
+
+/**
+ * @brief Adds Authentication Method property to the MQTT property builder.
+ *
+ * This function adds Authentication Method property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  authMethod        Pointer to the authentication method string.
+ * @param[in]  authMethodLength  Length of the authentication method string.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Authentication Method was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_connauthmethod] */
+MQTTStatus_t MQTTPropAdd_ConnAuthMethod( MQTTPropBuilder_t* pPropertyBuilder,
+                                         const char* authMethod,
+                                         uint16_t authMethodLength,
+                                         const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_connauthmethod] */
+
+/**
+ * @brief Adds Authentication Data property to the MQTT property builder.
+ *
+ * This function adds Authentication Data property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  authData          Pointer to the authentication data.
+ * @param[in]  authDataLength    Length of the authentication data.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Authentication Data was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_connauthdata] */
+MQTTStatus_t MQTTPropAdd_ConnAuthData( MQTTPropBuilder_t* pPropertyBuilder,
+                                       const char* authData,
+                                       uint16_t authDataLength,
+                                       const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_connauthdata] */
+
+/**
+ * @brief Adds Payload Format Indicator property to the MQTT property builder.
+ *
+ * This function adds Payload Format Indicator property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  payloadFormat     Boolean indicating the payload format (true for UTF-8, false for unspecified bytes).
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Payload Format Indicator was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_pubpayloadformat] */
+MQTTStatus_t MQTTPropAdd_PubPayloadFormat( MQTTPropBuilder_t* pPropertyBuilder,
+                                           bool payloadFormat,
+                                           const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_pubpayloadformat] */
+
+/**
+ * @brief Adds Message Expiry Interval property to the MQTT property builder.
+ *
+ * This function adds Message Expiry Interval property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  messageExpiry     The message expiry interval in seconds.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Message Expiry Interval was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_pubmessageexpiry] */
+MQTTStatus_t MQTTPropAdd_PubMessageExpiry( MQTTPropBuilder_t* pPropertyBuilder,
+                                           uint32_t messageExpiry,
+                                           const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_pubmessageexpiry] */
+
+/**
+ * @brief Adds Will Delay Interval property to the MQTT property builder.
+ *
+ * This function adds Message Expiry Interval property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  willDelayInterval  Will Delay Interval in seconds.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Message Expiry Interval was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_willdelayinterval] */
+MQTTStatus_t MQTTPropAdd_WillDelayInterval( MQTTPropBuilder_t * pPropertyBuilder,
+                                            uint32_t willDelayInterval,
+                                            const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_willdelayinterval] */
+
+/**
+ * @brief Adds Topic Alias property to the MQTT property builder.
+ *
+ * This function adds Topic Alias property to the property builder.
+ *
+ * @param[out] pPropertyBuilder   Pointer to the property builder structure.
+ * @param[in]  topicAlias        The topic alias value.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Topic Alias was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_pubtopicalias] */
+MQTTStatus_t MQTTPropAdd_PubTopicAlias( MQTTPropBuilder_t* pPropertyBuilder,
+                                        uint16_t topicAlias,
+                                        const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_pubtopicalias] */
+
+/**
+ * @brief Adds Response Topic property to the MQTT property builder.
+ *
+ * This function adds Response Topic property to the property builder.
+ *
+ * @param[out] pPropertyBuilder      Pointer to the property builder structure.
+ * @param[in]  responseTopic        Pointer to the response topic string.
+ * @param[in]  responseTopicLength  Length of the response topic string.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Response Topic was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_pubresponsetopic] */
+MQTTStatus_t MQTTPropAdd_PubResponseTopic( MQTTPropBuilder_t* pPropertyBuilder,
+                                           const char* responseTopic,
+                                           uint16_t responseTopicLength,
+                                           const uint8_t * pOptionalMqttPacketType);
+/* @[declare_mqttpropadd_pubresponsetopic] */
+/**
+ * @brief Adds Correlation Data property to the MQTT property builder.
+ *
+ * This function adds Correlation Data property to the property builder.
+ *
+ * @param[out] pPropertyBuilder      Pointer to the property builder structure.
+ * @param[in]  pCorrelationData     Pointer to the correlation data.
+ * @param[in]  correlationLength    Length of the correlation data.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Correlation Data was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_pubcorrelationdata] */
+MQTTStatus_t MQTTPropAdd_PubCorrelationData(MQTTPropBuilder_t* pPropertyBuilder,
+                                            const void* pCorrelationData,
+                                            uint16_t correlationLength,
+                                            const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_pubcorrelationdata] */
+
+/**
+ * @brief Adds Content Type property to the MQTT property builder.
+ *
+ * This function adds Content Type property to the property builder.
+ *
+ * @param[out] pPropertyBuilder     Pointer to the property builder structure.
+ * @param[in]  contentType         Pointer to the content type string.
+ * @param[in]  contentTypeLength   Length of the content type string.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Content Type was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_pubcontenttype] */
+MQTTStatus_t MQTTPropAdd_PubContentType( MQTTPropBuilder_t* pPropertyBuilder,
+                                         const char* contentType,
+                                         uint16_t contentTypeLength,
+                                         const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_pubcontenttype] */
+
+/**
+ * @brief Adds Reason String property to the MQTT property builder.
+ *
+ * This function adds Reason String property to the property builder.
+ *
+ * @param[out] pPropertyBuilder      Pointer to the property builder structure.
+ * @param[in]  pReasonString        Pointer to the reason string.
+ * @param[in]  reasonStringLength   Length of the reason string.
+ * @param[in]  pOptionalMqttPacketType Optional MQTT packet type for which the property
+ *            is being added. The function will check whether the given property can be
+ *            added to the packet type if it is provided.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the Reason String was successfully added
+ * - #MQTTBadParameter if an invalid parameter is passed
+ * - #MQTTNoMemory if the property builder has insufficient space
+ */
+/* @[declare_mqttpropadd_reasonstring] */
+MQTTStatus_t MQTTPropAdd_ReasonString( MQTTPropBuilder_t* pPropertyBuilder,
+                                       const char* pReasonString,
+                                       uint16_t reasonStringLength,
+                                       const uint8_t * pOptionalMqttPacketType );
+/* @[declare_mqttpropadd_reasonstring] */
+
+/**
  * @brief Updates the MQTT context with connect properties from the property builder.
  *
  * This function processes the property builder and updates the connect properties
