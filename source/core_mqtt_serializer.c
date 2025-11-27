@@ -459,17 +459,23 @@ static bool calculatePublishPacketSize( const MQTTPublishInfo_t * pPublishInfo,
  * @param[in] subscriptionCount The number of elements in pSubscriptionList.
  * @param[out] pRemainingLength The Remaining Length of the MQTT SUBSCRIBE or
  * UNSUBSCRIBE packet.
- * @param[out] pPacketSize The total size of the MQTT MQTT SUBSCRIBE or
- * UNSUBSCRIBE packet.
- * @param[in] subscriptionType #MQTT_SUBSCRIBE or #MQTT_UNSUBSCRIBE.
+ * @param[out] pPacketSize The total size of the MQTT SUBSCRIBE or
+ * MQTT UNSUBSCRIBE packet.
+ * @param[in] subscribePropLen Length of the optional properties in MQTT_SUBSCRIBE or MQTT_UNSUBSCRIBE
+ * @param[in] maxPacketSize Maximum Packet Size allowed by the broker
+ * @param[in] subscriptionType #MQTT_TYPE_SUBSCRIBE or #MQTT_TYPE_UNSUBSCRIBE.
  *
- * #MQTTBadParameter if the packet would exceed the size allowed by the
- * MQTT spec or a subscription is empty; #MQTTSuccess otherwise.
+ * @return MQTTBadParameter if the packet would exceed the size allowed by the
+ * MQTT spec or a subscription is empty; MQTTSuccess otherwise.
+ *
  */
+
 static MQTTStatus_t calculateSubscriptionPacketSize( const MQTTSubscribeInfo_t * pSubscriptionList,
                                                      size_t subscriptionCount,
                                                      size_t * pRemainingLength,
                                                      size_t * pPacketSize,
+                                                     size_t subscribePropLen,
+                                                     uint32_t maxPacketSize,
                                                      MQTTSubscriptionType_t subscriptionType );
 
 /**
@@ -1782,75 +1788,62 @@ static MQTTStatus_t calculateSubscriptionPacketSize( const MQTTSubscribeInfo_t *
                                                      size_t subscriptionCount,
                                                      size_t * pRemainingLength,
                                                      size_t * pPacketSize,
+                                                     size_t subscribePropLen,
+                                                     uint32_t maxPacketSize,
                                                      MQTTSubscriptionType_t subscriptionType )
 {
+    size_t packetSize = 0U, i = 0U;
     MQTTStatus_t status = MQTTSuccess;
-    size_t i = 0, packetSize = 0;
 
     assert( pSubscriptionList != NULL );
     assert( subscriptionCount != 0U );
-    assert( pRemainingLength != NULL );
-    assert( pPacketSize != NULL );
 
-    /* The variable header of a subscription packet consists of a 2-byte packet
-     * identifier. */
+    /*2 byte packet id*/
     packetSize += sizeof( uint16_t );
 
-    /* Sum the lengths of all subscription topic filters; add 1 byte for each
-     * subscription's QoS if type is MQTT_SUBSCRIBE. */
+
+    packetSize += subscribePropLen;
+    packetSize += variableLengthEncodedSize( subscribePropLen );
+
     for( i = 0; i < subscriptionCount; i++ )
     {
-        /* Add the length of the topic filter. MQTT strings are prepended
-         * with 2 byte string length field. Hence 2 bytes are added to size. */
         packetSize += pSubscriptionList[ i ].topicFilterLength + sizeof( uint16_t );
 
-        /* Only SUBSCRIBE packets include the QoS. */
-        if( subscriptionType == MQTT_SUBSCRIBE )
+        if( subscriptionType == MQTT_TYPE_SUBSCRIBE )
         {
             packetSize += 1U;
-        }
-
-        /* Validate each topic filter. */
-        if( ( pSubscriptionList[ i ].topicFilterLength == 0U ) ||
-            ( pSubscriptionList[ i ].pTopicFilter == NULL ) )
-        {
-            status = MQTTBadParameter;
-            LogError( ( "Subscription #%lu in %sSUBSCRIBE packet cannot be empty.",
-                        ( unsigned long ) i,
-                        ( subscriptionType == MQTT_SUBSCRIBE ) ? "" : "UN" ) );
-            /* It is not necessary to break as an error status has already been set. */
         }
     }
 
     /* At this point, the "Remaining length" has been calculated. Return error
-     * if the "Remaining length" exceeds what is allowed by MQTT 3.1.1. Otherwise,
+     * if the "Remaining length" exceeds what is allowed by MQTT 5. Otherwise,
      * set the output parameter.*/
     if( packetSize > MQTT_MAX_REMAINING_LENGTH )
     {
-        LogError( ( "Subscription packet length of %lu exceeds"
-                    "the MQTT 3.1.1 maximum packet length of %lu.",
+        LogError( ( "Subscribe packet size %lu exceeds %d. "
+                    "Packet size cannot be greater than %d.",
                     ( unsigned long ) packetSize,
-                    MQTT_MAX_REMAINING_LENGTH ) );
+                    UINT16_MAX,
+                    UINT16_MAX ) );
         status = MQTTBadParameter;
     }
 
     if( status == MQTTSuccess )
     {
         *pRemainingLength = packetSize;
-
-        /* Calculate the full size of the subscription packet by adding
-         * number of bytes required to encode the "Remaining length" field
-         * plus 1 byte for the "Packet type" field. */
-        packetSize += 1U + remainingLengthEncodedSize( packetSize );
-
-        /* Set the pPacketSize output parameter. */
+        packetSize += 1U + variableLengthEncodedSize( packetSize );
         *pPacketSize = packetSize;
+    }
+
+    if( packetSize > maxPacketSize )
+    {
+        LogError( ( "Packet size is greater than the allowed maximum packet size." ) );
+        status = MQTTBadParameter;
     }
 
     LogDebug( ( "Subscription packet remaining length=%lu and packet size=%lu.",
                 ( unsigned long ) *pRemainingLength,
                 ( unsigned long ) *pPacketSize ) );
-
     return status;
 }
 
@@ -3361,35 +3354,39 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
 
 MQTTStatus_t MQTT_GetSubscribePacketSize( const MQTTSubscribeInfo_t * pSubscriptionList,
                                           size_t subscriptionCount,
+                                          const MQTTPropBuilder_t * pSubscribeProperties,
                                           size_t * pRemainingLength,
-                                          size_t * pPacketSize )
+                                          size_t * pPacketSize,
+                                          uint32_t maxPacketSize )
 {
     MQTTStatus_t status = MQTTSuccess;
+    size_t propertyLength = 0U;
 
-    /* Validate parameters. */
-    if( ( pSubscriptionList == NULL ) || ( pRemainingLength == NULL ) ||
-        ( pPacketSize == NULL ) )
+    if( ( pSubscribeProperties != NULL ) && ( pSubscribeProperties->pBuffer != NULL ) )
     {
-        LogError( ( "Argument cannot be NULL: pSubscriptionList=%p, "
-                    "pRemainingLength=%p, pPacketSize=%p.",
-                    ( void * ) pSubscriptionList,
-                    ( void * ) pRemainingLength,
-                    ( void * ) pPacketSize ) );
+        propertyLength = pSubscribeProperties->currentIndex;
+    }
+
+    if( pSubscriptionList == NULL )
+    {
+        LogError( ( "Argument cannot be null : SubscriptionList" ) );
         status = MQTTBadParameter;
     }
     else if( subscriptionCount == 0U )
     {
-        LogError( ( "subscriptionCount is 0." ) );
+        LogError( ( "Subscription count cannot be 0" ) );
+        status = MQTTBadParameter;
+    }
+    else if( maxPacketSize == 0U )
+    {
+        LogError( ( "Max Packet size cannot be 0" ) );
         status = MQTTBadParameter;
     }
     else
     {
-        /* Calculate the MQTT SUBSCRIBE packet size. */
-        status = calculateSubscriptionPacketSize( pSubscriptionList,
-                                                  subscriptionCount,
-                                                  pRemainingLength,
-                                                  pPacketSize,
-                                                  MQTT_SUBSCRIBE );
+        status = calculateSubscriptionPacketSize( pSubscriptionList, subscriptionCount,
+                                                  pRemainingLength, pPacketSize, propertyLength,
+                                                  maxPacketSize, MQTT_TYPE_SUBSCRIBE );
     }
 
     return status;
@@ -5692,6 +5689,64 @@ MQTTStatus_t MQTTPropAdd_ReasonString( MQTTPropBuilder_t * pPropertyBuilder,
         /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
         /* coverity[misra_c_2012_rule_10_8_violation] */
         pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - ( &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ] ) );
+    }
+
+    return status;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t MQTT_ValidateSubscribeProperties( uint8_t isSubscriptionIdAvailable,
+                                               const MQTTPropBuilder_t * propBuilder )
+{
+    MQTTStatus_t status = MQTTSuccess;
+    size_t propertyLength = 0U;
+    uint8_t * pLocalIndex = NULL;
+    size_t subscriptionId = 0;
+
+    if( ( propBuilder == NULL ) || ( propBuilder->pBuffer == NULL ) )
+    {
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        propertyLength = propBuilder->currentIndex;
+        pLocalIndex = propBuilder->pBuffer;
+    }
+
+    while( ( propertyLength > 0U ) && ( status == MQTTSuccess ) )
+    {
+        uint8_t propertyId = *pLocalIndex;
+        pLocalIndex = &pLocalIndex[ 1 ];
+        propertyLength -= sizeof( uint8_t );
+
+        switch( propertyId )
+        {
+            case MQTT_SUBSCRIPTION_ID_ID:
+
+                status = decodeVariableLength( pLocalIndex, propertyLength, &subscriptionId );
+
+                if( status == MQTTSuccess )
+                {
+                    propertyLength -= variableLengthEncodedSize( subscriptionId );
+
+                    if( isSubscriptionIdAvailable == 0U )
+                    {
+                        LogError( ( "Protocol Error : Subscription Id not available" ) );
+                        status = MQTTBadParameter;
+                    }
+                }
+
+                break;
+
+            case MQTT_USER_PROPERTY_ID:
+                status = decodeAndDiscard( &propertyLength, &pLocalIndex );
+                break;
+
+            default:
+                status = MQTTBadParameter;
+                break;
+        }
     }
 
     return status;

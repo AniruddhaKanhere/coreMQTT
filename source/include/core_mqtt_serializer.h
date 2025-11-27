@@ -677,6 +677,16 @@ typedef struct MQTTUserProperty
 } MQTTUserProperty_t;
 
 /**
+ * @ingroup mqtt_enum_types
+ * @brief MQTT Subscription packet types.
+ */
+typedef enum MQTTSubscriptionType
+{
+    MQTT_TYPE_SUBSCRIBE,  /**< @brief The type is a SUBSCRIBE packet. */
+    MQTT_TYPE_UNSUBSCRIBE /**< @brief The type is a UNSUBSCRIBE packet. */
+} MQTTSubscriptionType_t;
+
+/**
  * @brief Encodes the remaining length of the packet using the variable length
  * encoding scheme provided in the MQTT 5.0 specification.
  *
@@ -819,17 +829,20 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
  *
  * This function must be called before #MQTT_SerializeSubscribe in order to get
  * the size of the MQTT SUBSCRIBE packet that is generated from the list of
- * #MQTTSubscribeInfo_t. The size of the #MQTTFixedBuffer_t supplied
- * to #MQTT_SerializeSubscribe must be at least @p pPacketSize. The provided
- * @p pSubscriptionList is valid for serialization with #MQTT_SerializeSubscribe
+ * #MQTTSubscribeInfo_t and #MQTTPropBuilder_t (optional subscribe properties).
+ * The size of the #MQTTFixedBuffer_t supplied to #MQTT_SerializeSubscribe must
+ * be at least @p pPacketSize. The provided @p pSubscriptionList is valid for
+ * serialization with #MQTT_SerializeSubscribe
  * only if this function returns #MQTTSuccess. The remaining length returned in
  * @p pRemainingLength and the packet size returned in @p pPacketSize are valid
  * only if this function returns #MQTTSuccess.
  *
  * @param[in] pSubscriptionList List of MQTT subscription info.
  * @param[in] subscriptionCount The number of elements in pSubscriptionList.
+ * @param[in] pSubscribeProperties MQTT SUBSCRIBE properties builder. Pass NULL if not used.
  * @param[out] pRemainingLength The Remaining Length of the MQTT SUBSCRIBE packet.
  * @param[out] pPacketSize The total size of the MQTT SUBSCRIBE packet.
+ * @param[in] maxPacketSize Maximum packet size.
  *
  * @return #MQTTBadParameter if the packet would exceed the size allowed by the
  * MQTT spec; #MQTTSuccess otherwise.
@@ -840,6 +853,7 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
  * // Variables used in this example.
  * MQTTStatus_t status;
  * MQTTSubscribeInfo_t subscriptionList[ NUMBER_OF_SUBSCRIPTIONS ] = { 0 };
+ * MQTTPropBuilder_t subscribeProperties = { 0 };
  * size_t remainingLength = 0, packetSize = 0;
  * // This is assumed to be a list of filters we want to subscribe to.
  * const char * filters[ NUMBER_OF_SUBSCRIPTIONS ];
@@ -851,11 +865,22 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
  *      // Each subscription needs a topic filter.
  *      subscriptionList[ i ].pTopicFilter = filters[ i ];
  *      subscriptionList[ i ].topicFilterLength = strlen( filters[ i ] );
+ *      subscriptionList[ i ].noLocalOption = false;
+ *      subscriptionList[ i ].retainAsPublishedOption = false;
+ *      subscriptionList[ i ].retainHandlingOption = retainSendOnSub;
  * }
+ *
+ * // Initialize subscribe properties (if needed)
+ * initializeSubscribeProperties( &subscribeProperties );
  *
  * // Get the size requirement for the subscribe packet.
  * status = MQTT_GetSubscribePacketSize(
- *      &subscriptionList[ 0 ], NUMBER_OF_SUBSCRIPTIONS, &remainingLength, &packetSize
+ *      &subscriptionList[ 0 ],
+ *      NUMBER_OF_SUBSCRIPTIONS,
+ *      &subscribeProperties,
+ *      &remainingLength,
+ *      &packetSize,
+ *      maxPacketSize
  * );
  *
  * if( status == MQTTSuccess )
@@ -867,9 +892,11 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
  */
 /* @[declare_mqtt_getsubscribepacketsize] */
 MQTTStatus_t MQTT_GetSubscribePacketSize( const MQTTSubscribeInfo_t * pSubscriptionList,
-                                          size_t subscriptionCount,
-                                          size_t * pRemainingLength,
-                                          size_t * pPacketSize );
+                                            size_t subscriptionCount,
+                                            const MQTTPropBuilder_t * pSubscribeProperties,
+                                            size_t * pRemainingLength,
+                                            size_t * pPacketSize,
+                                            uint32_t maxPacketSize );
 /* @[declare_mqtt_getsubscribepacketsize] */
 
 /**
@@ -2249,6 +2276,22 @@ MQTTStatus_t MQTTPropAdd_ReasonString( MQTTPropBuilder_t* pPropertyBuilder,
                                        uint16_t reasonStringLength,
                                        const uint8_t * pOptionalMqttPacketType );
 /* @[declare_mqttpropadd_reasonstring] */
+
+/**
+ * @brief Validates the properties of a SUBSCRIBE packet.
+ *
+ * This function validates the properties in the property builder for a SUBSCRIBE packet.
+ *
+ * @param[in] isSubscriptionIdAvailable  Boolean indicating if subscription identifiers are supported.
+ * @param[in] propBuilder               Pointer to the property builder structure.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the properties are valid
+ * - #MQTTBadParameter if an invalid parameter is passed
+ */
+/* @[declare_mqtt_validatesubscribeproperties] */
+MQTTStatus_t MQTT_ValidateSubscribeProperties(uint8_t isSubscriptionIdAvailable, const MQTTPropBuilder_t* propBuilder);
+/* @[declare_mqtt_validatesubscribeproperties] */
 
 /**
  * @brief Updates the MQTT context with connect properties from the property builder.
