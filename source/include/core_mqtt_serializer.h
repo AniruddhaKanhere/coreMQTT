@@ -234,6 +234,12 @@
                    ( ( ( uint32_t ) ptr[ 2 ] ) << 8 ) |  \
                    ( ( uint32_t ) ptr[ 3 ] ) )
 
+/**
+ * @brief Set a bit in an 8-bit unsigned integer.
+ */
+#define UINT8_SET_BIT( x, position )      ( ( x ) = ( uint8_t ) ( ( x ) | ( 0x01U << ( position ) ) ) )
+
+
 /* Structures defined in this file. */
 struct MQTTFixedBuffer;
 struct MQTTConnectInfo;
@@ -344,13 +350,23 @@ typedef struct MQTTConnectInfo
 } MQTTConnectInfo_t;
 
 /**
+ * @ingroup mqtt_enum_types
+ * @brief Retain Handling types.
+ */
+typedef enum MQTTRetainHandling{
+    retainSendOnSub = 0, /**< Send retained messages at the time of subscription. */
+    retainSendOnSubIfNotPresent = 1,  /**< Send retained messages at subscription only if subscription does not currently exist. */
+    retainDoNotSendonSub = 2 /**< Do not send retained messages at the time of subscription. */
+}MQTTRetainHandling_t;
+
+/**
  * @ingroup mqtt_struct_types
  * @brief MQTT SUBSCRIBE packet parameters.
  */
 typedef struct MQTTSubscribeInfo
 {
     /**
-     * @brief Quality of Service for subscription.
+     * @brief Quality of Service for subscription. Include protocol error of qos > 2
      */
     MQTTQoS_t qos;
 
@@ -360,9 +376,31 @@ typedef struct MQTTSubscribeInfo
     const char * pTopicFilter;
 
     /**
-     * @brief Length of subscription topic filter.
+     * @brief Length of subscription topic filter - unsigned long
      */
     uint16_t topicFilterLength;
+    /**
+     * @brief no local option for subscription. Include protocol error if noLocalOption = 1 in a shared subscription
+     */
+
+    /**
+     * @brief If true, Application Messages that are published to this subscription
+     * will not be forwarded to the Client that published them.
+     */
+    bool noLocalOption;
+
+    /**
+     *  @brief If true, Application Messages forwarded using this subscription keep the RETAIN
+     * flag they were published with.
+     */
+    bool retainAsPublishedOption;
+
+    /**
+     * @brief Specifies whether retained messages are sent
+     * when the subscription is established.
+     */
+    MQTTRetainHandling_t retainHandlingOption;
+
 } MQTTSubscribeInfo_t;
 
 /**
@@ -445,6 +483,20 @@ typedef struct MQTTPropBuilder
     size_t currentIndex;         /**< @brief Current position in the buffer where next property will be written. */
     uint32_t fieldSet;           /**< @brief Bitfield tracking which properties have been added. */
 } MQTTPropBuilder_t;
+
+ /**
+ * @ingroup mqtt_struct_types
+ * @brief Struct to hold reason codes.
+ */
+typedef struct MQTTReasonCodeInfo
+{
+    /** @brief Pointer to the reason code array. */
+    const uint8_t * reasonCode;
+
+    /** @brief Length of the reason code array. */
+    size_t reasonCodeLength;
+
+} MQTTReasonCodeInfo_t;
 
 /**
 * @ingroup mqtt_struct_types
@@ -677,6 +729,16 @@ typedef struct MQTTUserProperty
 } MQTTUserProperty_t;
 
 /**
+ * @ingroup mqtt_enum_types
+ * @brief MQTT Subscription packet types.
+ */
+typedef enum MQTTSubscriptionType
+{
+    MQTT_TYPE_SUBSCRIBE,  /**< @brief The type is a SUBSCRIBE packet. */
+    MQTT_TYPE_UNSUBSCRIBE /**< @brief The type is a UNSUBSCRIBE packet. */
+} MQTTSubscriptionType_t;
+
+/**
  * @brief Encodes the remaining length of the packet using the variable length
  * encoding scheme provided in the MQTT 5.0 specification.
  *
@@ -819,17 +881,20 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
  *
  * This function must be called before #MQTT_SerializeSubscribe in order to get
  * the size of the MQTT SUBSCRIBE packet that is generated from the list of
- * #MQTTSubscribeInfo_t. The size of the #MQTTFixedBuffer_t supplied
- * to #MQTT_SerializeSubscribe must be at least @p pPacketSize. The provided
- * @p pSubscriptionList is valid for serialization with #MQTT_SerializeSubscribe
+ * #MQTTSubscribeInfo_t and #MQTTPropBuilder_t (optional subscribe properties).
+ * The size of the #MQTTFixedBuffer_t supplied to #MQTT_SerializeSubscribe must
+ * be at least @p pPacketSize. The provided @p pSubscriptionList is valid for
+ * serialization with #MQTT_SerializeSubscribe
  * only if this function returns #MQTTSuccess. The remaining length returned in
  * @p pRemainingLength and the packet size returned in @p pPacketSize are valid
  * only if this function returns #MQTTSuccess.
  *
  * @param[in] pSubscriptionList List of MQTT subscription info.
  * @param[in] subscriptionCount The number of elements in pSubscriptionList.
+ * @param[in] pSubscribeProperties MQTT SUBSCRIBE properties builder. Pass NULL if not used.
  * @param[out] pRemainingLength The Remaining Length of the MQTT SUBSCRIBE packet.
  * @param[out] pPacketSize The total size of the MQTT SUBSCRIBE packet.
+ * @param[in] maxPacketSize Maximum packet size.
  *
  * @return #MQTTBadParameter if the packet would exceed the size allowed by the
  * MQTT spec; #MQTTSuccess otherwise.
@@ -840,6 +905,7 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
  * // Variables used in this example.
  * MQTTStatus_t status;
  * MQTTSubscribeInfo_t subscriptionList[ NUMBER_OF_SUBSCRIPTIONS ] = { 0 };
+ * MQTTPropBuilder_t subscribeProperties = { 0 };
  * size_t remainingLength = 0, packetSize = 0;
  * // This is assumed to be a list of filters we want to subscribe to.
  * const char * filters[ NUMBER_OF_SUBSCRIPTIONS ];
@@ -851,11 +917,22 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
  *      // Each subscription needs a topic filter.
  *      subscriptionList[ i ].pTopicFilter = filters[ i ];
  *      subscriptionList[ i ].topicFilterLength = strlen( filters[ i ] );
+ *      subscriptionList[ i ].noLocalOption = false;
+ *      subscriptionList[ i ].retainAsPublishedOption = false;
+ *      subscriptionList[ i ].retainHandlingOption = retainSendOnSub;
  * }
+ *
+ * // Initialize subscribe properties (if needed)
+ * initializeSubscribeProperties( &subscribeProperties );
  *
  * // Get the size requirement for the subscribe packet.
  * status = MQTT_GetSubscribePacketSize(
- *      &subscriptionList[ 0 ], NUMBER_OF_SUBSCRIPTIONS, &remainingLength, &packetSize
+ *      &subscriptionList[ 0 ],
+ *      NUMBER_OF_SUBSCRIPTIONS,
+ *      &subscribeProperties,
+ *      &remainingLength,
+ *      &packetSize,
+ *      maxPacketSize
  * );
  *
  * if( status == MQTTSuccess )
@@ -867,9 +944,11 @@ MQTTStatus_t MQTT_SerializeConnect( const MQTTConnectInfo_t * pConnectInfo,
  */
 /* @[declare_mqtt_getsubscribepacketsize] */
 MQTTStatus_t MQTT_GetSubscribePacketSize( const MQTTSubscribeInfo_t * pSubscriptionList,
-                                          size_t subscriptionCount,
-                                          size_t * pRemainingLength,
-                                          size_t * pPacketSize );
+                                            size_t subscriptionCount,
+                                            const MQTTPropBuilder_t * pSubscribeProperties,
+                                            size_t * pRemainingLength,
+                                            size_t * pPacketSize,
+                                            uint32_t maxPacketSize );
 /* @[declare_mqtt_getsubscribepacketsize] */
 
 /**
@@ -1525,15 +1604,21 @@ MQTTStatus_t MQTT_DeserializePublish( const MQTTPacketInfo_t * pIncomingPacket,
 /* @[declare_mqtt_deserializepublish] */
 
 /**
- * @brief Deserialize an MQTT CONNACK, SUBACK, UNSUBACK, PUBACK, PUBREC, PUBREL,
- * PUBCOMP, or PINGRESP.
+ * @brief Deserialize an MQTT PUBACK, PUBREC, PUBREL, PUBCOMP, SUBACK, UNSUBACK, PINGRESP or CONNACK.
  *
  * @param[in] pIncomingPacket #MQTTPacketInfo_t containing the buffer.
- * @param[out] pPacketId The packet ID of obtained from the buffer. Not used
- * in CONNACK or PINGRESP.
- * @param[out] pSessionPresent Boolean flag from a CONNACK indicating present session.
+ * @param[out] pPacketId The packet ID obtained from the buffer.
+ * @param[out] pReasonCode Struct to store reason code(s) from the acknowledgment packet.
+ *                        Contains the success/failure status of the corresponding request.
+ * @param[out] pPropBuffer Struct to store the deserialized acknowledgment properties.
+ *                       Will contain any MQTT v5.0 properties included in the ack packet.
+ * @param[in,out] pConnectProperties Struct to store the deserialized connect/connack properties.
  *
- * @return #MQTTBadParameter, #MQTTBadResponse, #MQTTServerRefused, or #MQTTSuccess.
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the packet was successfully deserialized
+ * - #MQTTBadParameter if invalid parameters are passed
+ * - #MQTTServerRefused if the server explicitly rejected the request, either in the CONNACK or a SUBACK.
+ * - #MQTTBadResponse if the packet type is invalid or packet parsing fails
  *
  * <b>Example</b>
  * @code{c}
@@ -1541,31 +1626,33 @@ MQTTStatus_t MQTT_DeserializePublish( const MQTTPacketInfo_t * pIncomingPacket,
  * // Variables used in this example.
  * MQTTStatus_t status;
  * MQTTPacketInfo_t incomingPacket;
- * // Used for SUBACK, UNSUBACK, PUBACK, PUBREC, PUBREL, and PUBCOMP.
  * uint16_t packetId;
- * // Used for CONNACK.
- * bool sessionPresent;
+ * MQTTReasonCodeInfo_t reasonCode ; // Can be set to NULL if the incoming packet is CONNACK or PINGRESP
+ * MQTTPropBuilder_t propBuffer; // Can be set to NULL if the user does not want any incoming properties.
+ * MQTTConnectionProperties_t connectionProperties = pContext->connectionProperties;  // Cannot be set to NULL.
  *
  * // Receive an incoming packet and populate all fields. The details are out of scope
  * // for this example.
- * receiveIncomingPacket( &incomingPacket );
+ * receiveIncomingPacket(&incomingPacket);
  *
- * // Deserialize ack information if the incoming packet is not a publish.
- * if( ( incomingPacket.type & 0xF0 ) != MQTT_PACKET_TYPE_PUBLISH )
+ * // Deserialize ack information if the incoming packet is a publish ack.
+ * status = MQTT_DeserializeAck(&incomingPacket,
+ *                             &packetId,
+ *                             &reasonCode,
+ *                             &propBuffer,
+ *                             &connectionProperties);
+ * if(status == MQTTSuccess)
  * {
- *      status = MQTT_DeserializeAck( &incomingPacket, &packetId, &sessionPresent );
- *      if( status == MQTTSuccess )
- *      {
- *          // The packet ID or session present flag information is available. For
- *          // ping response packets, the only information is the status code.
- *      }
+ *     // Ack information is now available.
  * }
  * @endcode
  */
 /* @[declare_mqtt_deserializeack] */
 MQTTStatus_t MQTT_DeserializeAck( const MQTTPacketInfo_t * pIncomingPacket,
-                                  uint16_t * pPacketId,
-                                  bool * pSessionPresent );
+                                uint16_t * pPacketId,
+                                MQTTReasonCodeInfo_t * pReasonCode,
+                                MQTTPropBuilder_t * pPropBuffer,
+                                MQTTConnectionProperties_t * pConnectProperties );
 /* @[declare_mqtt_deserializeack] */
 
 /**
@@ -2249,6 +2336,22 @@ MQTTStatus_t MQTTPropAdd_ReasonString( MQTTPropBuilder_t* pPropertyBuilder,
                                        uint16_t reasonStringLength,
                                        const uint8_t * pOptionalMqttPacketType );
 /* @[declare_mqttpropadd_reasonstring] */
+
+/**
+ * @brief Validates the properties of a SUBSCRIBE packet.
+ *
+ * This function validates the properties in the property builder for a SUBSCRIBE packet.
+ *
+ * @param[in] isSubscriptionIdAvailable  Boolean indicating if subscription identifiers are supported.
+ * @param[in] propBuilder               Pointer to the property builder structure.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the properties are valid
+ * - #MQTTBadParameter if an invalid parameter is passed
+ */
+/* @[declare_mqtt_validatesubscribeproperties] */
+MQTTStatus_t MQTT_ValidateSubscribeProperties(bool isSubscriptionIdAvailable, const MQTTPropBuilder_t* propBuilder);
+/* @[declare_mqtt_validatesubscribeproperties] */
 
 /**
  * @brief Updates the MQTT context with connect properties from the property builder.
