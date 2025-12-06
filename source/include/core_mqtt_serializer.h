@@ -79,7 +79,7 @@
 #define MQTT_SUBSCRIBE_RETAIN_HANDLING1        ( 4 ) /**<@brief MQTT SUBSCRIBE Retain Handling Option 1 */
 #define MQTT_SUBSCRIBE_RETAIN_HANDLING2        ( 5 ) /**<@brief Retain Handling Option 2   -> in core_mqtt_serializer.c */
 
-/* CONNECT PROPERTIES */
+/* CONNECT PROPERTIES. */
 
 /**
 * @brief Session expiry id.
@@ -127,7 +127,7 @@
 #define MQTT_AUTH_DATA_ID           ( 0x16 )
 
 
-/* Publish properties */
+/* Publish properties. */
 
 /**
 * @brief Will delay id.
@@ -165,7 +165,7 @@
 #define MQTT_TOPIC_ALIAS_ID         ( 0x23 )
 
 
-/* CONNACK PROPERTIES */
+/* CONNACK PROPERTIES. */
 
 /**
 * @brief Max qos id.
@@ -2390,6 +2390,30 @@ MQTTStatus_t MQTT_ValidateSubscribeProperties(bool isSubscriptionIdAvailable, co
  */
 
 MQTTStatus_t updateContextWithConnectProps(const MQTTPropBuilder_t* pPropBuilder, MQTTConnectionProperties_t* pConnectProperties);
+
+MQTTStatus_t MQTT_GetNextPropertyType( MQTTPropBuilder_t * mqttPropBuilder,
+                                       size_t * index,
+                                       uint8_t * property );
+
+MQTTStatus_t MQTTPropGet_UserProp( MQTTPropBuilder_t * mqttPropBuilder,
+                                   size_t * currentIndex,
+                                   MQTTUserProperty_t * pUserProperty );
+
+MQTTStatus_t MQTTPropGet_SessionExpiry( MQTTPropBuilder_t * pPropertyBuilder,
+                                        size_t * currentIndex,
+                                        uint32_t * pSessionExpiry );
+
+MQTTStatus_t MQTTPropGet_ReceiveMax( MQTTPropBuilder_t * pPropertyBuilder,
+                                     size_t * currentIndex,
+                                     uint16_t * pReceiveMax );
+
+MQTTStatus_t MQTTPropGet_MaxQos( MQTTPropBuilder_t * pPropertyBuilder,
+                                 size_t * currentIndex,
+                                 uint8_t * pMaxQos );
+
+MQTTStatus_t MQTTPropGet_RetainAvailable( MQTTPropBuilder_t * pPropertyBuilder,
+                                          size_t * currentIndex,
+                                          uint8_t * pRetainAvailable );
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus

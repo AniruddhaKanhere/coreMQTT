@@ -5880,7 +5880,6 @@ MQTTStatus_t MQTT_ValidateSubscribeProperties( bool isSubscriptionIdAvailable,
                         status = MQTTBadParameter;
                     }
                 }
-
                 break;
 
             case MQTT_USER_PROPERTY_ID:
@@ -5901,3 +5900,839 @@ MQTTStatus_t MQTT_ValidateSubscribeProperties( bool isSubscriptionIdAvailable,
 }
 
 /*-----------------------------------------------------------*/
+
+MQTTStatus_t MQTT_GetNextPropertyType( MQTTPropBuilder_t * mqttPropBuilder,
+                                       size_t * index,
+                                       uint8_t * property )
+{
+    MQTTStatus_t status = MQTTSuccess;
+    if( ( mqttPropBuilder == NULL ) || ( mqttPropBuilder->pBuffer == NULL ) ||
+        ( index == NULL ) || ( property == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *index >= mqttPropBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        *property = mqttPropBuilder->pBuffer[ *index ];
+
+        switch( *property )
+        {        
+            case MQTT_SESSION_EXPIRY_ID:
+            case MQTT_RECEIVE_MAX_ID:
+            case MQTT_MAX_PACKET_SIZE_ID:
+            case MQTT_TOPIC_ALIAS_MAX_ID:
+            case MQTT_REQUEST_RESPONSE_ID:
+            case MQTT_REQUEST_PROBLEM_ID:
+            case MQTT_USER_PROPERTY_ID:
+            case MQTT_AUTH_METHOD_ID:
+            case MQTT_AUTH_DATA_ID:
+            case MQTT_WILL_DELAY_ID:
+            case MQTT_PAYLOAD_FORMAT_ID:
+            case MQTT_MSG_EXPIRY_ID:
+            case MQTT_CONTENT_TYPE_ID:
+            case MQTT_RESPONSE_TOPIC_ID:
+            case MQTT_CORRELATION_DATA_ID:
+            case MQTT_TOPIC_ALIAS_ID:
+            case MQTT_MAX_QOS_ID:
+            case MQTT_RETAIN_AVAILABLE_ID:
+            case MQTT_ASSIGNED_CLIENT_ID:
+            case MQTT_REASON_STRING_ID:
+            case MQTT_WILDCARD_ID:
+            case MQTT_SUB_AVAILABLE_ID:
+            case MQTT_SHARED_SUB_ID:
+            case MQTT_SERVER_KEEP_ALIVE_ID:
+            case MQTT_RESPONSE_INFO_ID:
+            case MQTT_SERVER_REF_ID:
+            case MQTT_SUBSCRIPTION_ID_ID:
+                break;
+
+            default:
+                LogError( ( "Unknown property ID: %d", *property ) );
+                status = MQTTBadParameter;
+                break;
+        }
+    }
+    return status;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t MQTTPropGet_UserProp( MQTTPropBuilder_t * pPropertyBuilder,
+                                   size_t * currentIndex,
+                                   MQTTUserProperty_t * pUserProperty )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pUserProperty == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_USER_PROPERTY_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUserProp( &pUserProperty->pKey,
+                                     &pUserProperty->keyLength,
+                                     &pUserProperty->pValue,
+                                     &pUserProperty->valueLength,
+                                     &remainingPropLength,
+                                     &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+        else
+        {
+            LogError( ( "Property is not a User Property." ) );
+            status = MQTTBadParameter;
+        }
+    }
+    return status;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t MQTTPropGet_SessionExpiry( MQTTPropBuilder_t * pPropertyBuilder,
+                                        size_t * currentIndex,
+                                        uint32_t * pSessionExpiry )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pSessionExpiry == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_SESSION_EXPIRY_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint32t( pSessionExpiry,
+                                    &remainingPropLength,
+                                    &( bool ){ false },
+                                    &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+        else
+        {
+            LogError( ( "Property is not a Session Expiry Property." ) );
+            status = MQTTBadParameter;
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_ReceiveMax( MQTTPropBuilder_t * pPropertyBuilder,
+                                     size_t * currentIndex,
+                                     uint16_t * pReceiveMax )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pReceiveMax == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_RECEIVE_MAX_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint16t( pReceiveMax,
+                                    &remainingPropLength,
+                                    &( bool ){ false },
+                                    &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_MaxQos( MQTTPropBuilder_t * pPropertyBuilder,
+                                 size_t * currentIndex,
+                                 uint8_t * pMaxQos )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pMaxQos == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_MAX_QOS_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint8t( pMaxQos,
+                                   &remainingPropLength,
+                                   &( bool ){ false },
+                                   &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_RetainAvailable( MQTTPropBuilder_t * pPropertyBuilder,
+                                          size_t * currentIndex,
+                                          uint8_t * pRetainAvailable )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pRetainAvailable == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_RETAIN_AVAILABLE_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint8t( pRetainAvailable,
+                                   &remainingPropLength,
+                                   &( bool ){ false },
+                                   &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_MaxPacketSize( MQTTPropBuilder_t * pPropertyBuilder,
+                                        size_t * currentIndex,
+                                        uint32_t * pMaxPacketSize )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pMaxPacketSize == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_MAX_PACKET_SIZE_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint32t( pMaxPacketSize,
+                                    &remainingPropLength,
+                                    &( bool ){ false },
+                                    &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_AssignedClientId( MQTTPropBuilder_t * pPropertyBuilder,
+                                           size_t * currentIndex,
+                                           const char ** pClientId,
+                                           uint16_t * pClientIdLength )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pClientId == NULL ) || ( pClientIdLength == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_ASSIGNED_CLIENT_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUtf8( pClientId,
+                                 pClientIdLength,
+                                 &remainingPropLength,
+                                 &( bool ){ false },
+                                 &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_TopicAliasMax( MQTTPropBuilder_t * pPropertyBuilder,
+                                        size_t * currentIndex,
+                                        uint16_t * pTopicAliasMax )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pTopicAliasMax == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_TOPIC_ALIAS_MAX_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint16t( pTopicAliasMax,
+                                    &remainingPropLength,
+                                    &( bool ){ false },
+                                    &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_ReasonString( MQTTPropBuilder_t * pPropertyBuilder,
+                                       size_t * currentIndex,
+                                       const char ** pReasonString,
+                                       uint16_t * pReasonStringLength )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pReasonString == NULL ) || ( pReasonStringLength == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_REASON_STRING_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUtf8( pReasonString,
+                                 pReasonStringLength,
+                                 &remainingPropLength,
+                                 &( bool ){ false },
+                                 &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_WildcardId( MQTTPropBuilder_t * pPropertyBuilder,
+                                     size_t * currentIndex,
+                                     uint8_t * pWildcardAvailable )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pWildcardAvailable == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_WILDCARD_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint8t( pWildcardAvailable,
+                                   &remainingPropLength,
+                                   &( bool ){ false },
+                                   &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_SubsIdAvailable( MQTTPropBuilder_t * pPropertyBuilder,
+                                          size_t * currentIndex,
+                                          uint8_t * pSubsIdAvailable )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pSubsIdAvailable == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_SUB_AVAILABLE_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint8t( pSubsIdAvailable,
+                                   &remainingPropLength,
+                                   &( bool ){ false },
+                                   &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_SharedSubAvailable( MQTTPropBuilder_t * pPropertyBuilder,
+                                             size_t * currentIndex,
+                                             uint8_t * pSharedSubAvailable )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pSharedSubAvailable == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_SHARED_SUB_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint8t( pSharedSubAvailable,
+                                   &remainingPropLength,
+                                   &( bool ){ false },
+                                   &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_ServerKeepAlive( MQTTPropBuilder_t * pPropertyBuilder,
+                                          size_t * currentIndex,
+                                          uint16_t * pServerKeepAlive )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pServerKeepAlive == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_SERVER_KEEP_ALIVE_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUint16t( pServerKeepAlive,
+                                    &remainingPropLength,
+                                    &( bool ){ false },
+                                    &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_ResponseInfo( MQTTPropBuilder_t * pPropertyBuilder,
+                                       size_t * currentIndex,
+                                       const char ** pResponseInfo,
+                                       uint16_t * pResponseInfoLength )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pResponseInfo == NULL ) || ( pResponseInfoLength == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_RESPONSE_INFO_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUtf8( pResponseInfo,
+                                 pResponseInfoLength,
+                                 &remainingPropLength,
+                                 &( bool ){ false },
+                                 &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_ServerRef( MQTTPropBuilder_t * pPropertyBuilder,
+                                    size_t * currentIndex,
+                                    const char ** pServerRef,
+                                    uint16_t * pServerRefLength )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pServerRef == NULL ) || ( pServerRefLength == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_SERVER_REF_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUtf8( pServerRef,
+                                 pServerRefLength,
+                                 &remainingPropLength,
+                                 &( bool ){ false },
+                                 &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_AuthMethod( MQTTPropBuilder_t * pPropertyBuilder,
+                                     size_t * currentIndex,
+                                     const char ** pAuthMethod,
+                                     uint16_t * pAuthMethodLen )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pAuthMethod == NULL ) || ( pAuthMethodLen == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_AUTH_METHOD_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUtf8( pAuthMethod,
+                                 pAuthMethodLen,
+                                 &remainingPropLength,
+                                 &( bool ){ false },
+                                 &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
+
+MQTTStatus_t MQTTPropGet_AuthData( MQTTPropBuilder_t * pPropertyBuilder,
+                                   size_t * currentIndex,
+                                   const char ** pAuthData,
+                                   uint16_t * pAuthDataLen )
+{
+    MQTTStatus_t status = MQTTSuccess;
+
+    if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) ||
+        ( currentIndex == NULL ) || ( pAuthData == NULL ) || ( pAuthDataLen == NULL ) )
+    {
+        LogError( ( "Argument cannot be NULL." ) );
+        status = MQTTBadParameter;
+    }
+    else if( *currentIndex >= pPropertyBuilder->currentIndex )
+    {
+        LogError( ( "Index out of bounds." ) );
+        status = MQTTBadParameter;
+    }
+    else
+    {
+        uint8_t propertyId = pPropertyBuilder->pBuffer[ *currentIndex ];
+
+        if( propertyId == MQTT_AUTH_METHOD_ID )
+        {
+            uint8_t * pLocalIndex = ( uint8_t * ) &pPropertyBuilder->pBuffer[ *currentIndex ];
+            /* Remaining properties = Total properties - current location in the buffer - 1 ( for property ID ). */
+            size_t remainingPropLength = ( size_t ) ( pPropertyBuilder->currentIndex - *currentIndex - 1U );
+
+            /* Move index to the beginning of the key. */
+            pLocalIndex++;
+
+            status = decodeUtf8( pAuthData,
+                                 pAuthDataLen,
+                                 &remainingPropLength,
+                                 &( bool ){ false },
+                                 &pLocalIndex );
+            if( status == MQTTSuccess )
+            {
+                /* Move the index to the end of the property. */
+                *currentIndex = ( size_t ) ( pLocalIndex - pPropertyBuilder->pBuffer );
+            }
+        }
+    }
+    return status;
+}
