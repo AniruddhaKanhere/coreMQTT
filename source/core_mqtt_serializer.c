@@ -28,8 +28,12 @@
  */
 #include <string.h>
 #include <assert.h>
+#include <inttypes.h>
+#include <stdbool.h>
 
 #include "core_mqtt_serializer.h"
+#include "transport_interface.h"
+#include "private/core_mqtt_serializer_private.h"
 
 /* Include config defaults header to get default values of configs. */
 #include "core_mqtt_config_defaults.h"
@@ -105,65 +109,6 @@
 #define MQTT_MAX_PACKET_SIZE                        ( MQTT_MAX_REMAINING_LENGTH + 5U )
 
 /**
- * @brief Set a bit in an 8-bit unsigned integer.
- */
-#define UINT8_SET_BIT( x, position )      ( ( x ) = ( uint8_t ) ( ( x ) | ( 0x01U << ( position ) ) ) )
-
-/**
- * @brief Clear a bit in an 8-bit unsigned integer.
- */
-#define UINT8_CLEAR_BIT( x, position )    ( ( x ) = ( uint8_t ) ( ( x ) & ( ~( 0x01U << ( position ) ) ) ) )
-
-/**
- * @brief Macro for checking if a bit is set in a 1-byte unsigned int.
- *
- * @param[in] x The unsigned int to check.
- * @param[in] position Which bit to check.
- */
-#define UINT8_CHECK_BIT( x, position )    ( ( ( x ) & ( 0x01U << ( position ) ) ) == ( 0x01U << ( position ) ) )
-
-/**
- * @brief Get the high byte of a 16-bit unsigned integer.
- */
-#define UINT16_HIGH_BYTE( x )             ( ( uint8_t ) ( ( x ) >> 8 ) )
-
-/**
- * @brief Get the low byte of a 16-bit unsigned integer.
- */
-#define UINT16_LOW_BYTE( x )              ( ( uint8_t ) ( ( x ) & 0x00ffU ) )
-
-/**
- * @brief Macro for decoding a 2-byte unsigned int from a sequence of bytes.
- *
- * @param[in] ptr A uint8_t* that points to the high byte.
- */
-#define UINT16_DECODE( ptr )                            \
-    ( uint16_t ) ( ( ( ( uint16_t ) ptr[ 0 ] ) << 8 ) | \
-                   ( ( uint16_t ) ptr[ 1 ] ) )
-
-/**
- * @brief Set a bit in an 32-bit unsigned integer.
- */
-#define UINT32_SET_BIT( x, position ) \
-    ( ( x ) = ( uint32_t ) ( ( x ) | ( ( uint32_t ) 0x01U << ( position ) ) ) )
-
-/**
- * @brief Macro for checking if a bit is set in a 4-byte unsigned int.
- *
- * @param[in] x The unsigned int to check.
- * @param[in] position Which bit to check.
- */
-#define UINT32_CHECK_BIT( x, position ) \
-    ( ( ( uint32_t ) ( x ) &( ( uint32_t ) 0x01U << ( position ) ) ) == ( ( uint32_t ) 0x01U << ( position ) ) )
-
-/**
- * @brief A value that represents an invalid remaining length.
- *
- * This value is greater than what is allowed by the MQTT specification.
- */
-#define MQTT_REMAINING_LENGTH_INVALID             ( ( size_t ) 268435456 )
-
-/**
  * @brief The minimum remaining length for a QoS 0 PUBLISH.
  *
  * Includes two bytes for topic name length and one byte for topic name.
@@ -207,199 +152,6 @@
  * Property Length byte (min)     + 1 = 3
  */
 #define MQTT_PACKET_CONNACK_MINIMUM_SIZE            ( 3U )
-
-/**
- * @brief Position of the properties for the fieldSet.
- *
- * Each property that can be added to an MQTT packet is assigned a unique bit
- * position (0–31). This macro defines the position of the property
- * in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- *
- * The `fieldSet` is used to track which properties have already been added to prevent
- * duplication, as many MQTT v5 properties must not appear more than once in a packet.
- */
-
-/**
- * @brief Defines the position of the **Subscription Identifier**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_SUBSCRIPTION_ID_POS             ( 1 )
-
-/**
- * @brief Defines the position of the **Session Expiry Interval**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_SESSION_EXPIRY_INTERVAL_POS     ( 2 )
-
-/**
- * @brief Defines the position of the **Receive Maximum**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_RECEIVE_MAXIMUM_POS             ( 3 )
-
-/**
- * @brief Defines the position of the **Maximum Packet Size**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_MAX_PACKET_SIZE_POS             ( 4 )
-
-/**
- * @brief Defines the position of the **Topic Alias Maximum**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_TOPIC_ALIAS_MAX_POS             ( 5 )
-
-/**
- * @brief Defines the position of the **Request Response Information**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_REQUEST_RESPONSE_INFO_POS       ( 6 )
-
-/**
- * @brief Defines the position of the **Request Problem Information**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_REQUEST_PROBLEM_INFO_POS        ( 7 )
-
-/**
- * @brief Defines the position of the **Authentication Method**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_AUTHENTICATION_METHOD_POS       ( 9 )
-
-/**
- * @brief Defines the position of the **Authentication Data**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_AUTHENTICATION_DATA_POS         ( 10 )
-
-/**
- * @brief Defines the position of the **Payload Format Indicator**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_PAYLOAD_FORMAT_INDICATOR_POS    ( 11 )
-
-/**
- * @brief Defines the position of the **Message Expiry Interval**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_MESSAGE_EXPIRY_INTERVAL_POS     ( 12 )
-
-/**
- * @brief Defines the position of the **Topic Alias**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_TOPIC_ALIAS_POS                 ( 13 )
-
-/**
- * @brief Defines the position of the **Response Topic**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_RESPONSE_TOPIC_POS              ( 14 )
-
-/**
- * @brief Defines the position of the **Correlation Data**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_CORRELATION_DATA_POS            ( 15 )
-
-/**
- * @brief Defines the position of the **Content Type**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_CONTENT_TYPE_POS                ( 16 )
-
-/**
- * @brief Defines the position of the **Reason String**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_REASON_STRING_POS               ( 17 )
-
-/**
- * @brief Defines the position of the **Will Delay Interval**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_WILL_DELAY_POS                  ( 18 )
-
-/**
- * @brief Defines the position of the **Assigned Client Identifier**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_ASSIGNED_CLIENT_ID_POS          ( 19 )
-
-/**
- * @brief Defines the position of the **Server Keep Alive**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_SERVER_KEEP_ALIVE_POS           ( 20 )
-
-/**
- * @brief Defines the position of the **Response Information**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_RESPONSE_INFORMATION_POS        ( 21 )
-
-/**
- * @brief Defines the position of the **Server Reference**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_SERVER_REFERENCE_POS            ( 22 )
-
-/**
- * @brief Defines the position of the **Maximum QoS**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_MAXIMUM_QOS_POS                 ( 23 )
-
-/**
- * @brief Defines the position of the **Retain Available**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_RETAIN_AVAILABLE_POS            ( 24 )
-
-/**
- * @brief Defines the position of the **Wildcard Subscription Available**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_WILDCARD_SUBSCRIPTION_AVAILABLE_POS  ( 25 )
-
-/**
- * @brief Defines the position of the **Subscription Identifier Available**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_SUBSCRIPTION_ID_AVAILABLE_POS   ( 26 )
-
-/**
- * @brief Defines the position of the **Shared Subscription Available**
- * property in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_SHARED_SUBSCRIPTION_AVAILABLE_POS  ( 27 )
-
-/**
- * @brief Defines the position of the **User property**
- * in the `fieldSet` bitfield of the `MQTTPropBuilder_t` struct.
- */
-#define MQTT_USER_PROP_POS  ( 28 )
-
-
-/**
- * @brief A value that represents an invalid remaining length.
- *
- * This value is greater than what is allowed by the MQTT specification.
- */
-#define MQTT_REMAINING_LENGTH_INVALID        ( ( size_t ) 268435456 )
-
-/**
- * This macro serializes a 32-bit unsigned integer (`val`) into 4 bytes at the
- * specified memory location (`addr`).
- */
-#define WRITE_UINT32( addr, val )                                  \
-    {                                                              \
-        ( addr )[ 3 ] = ( uint8_t ) ( ( ( val ) >> 0 ) & 0xFFU );  \
-        ( addr )[ 2 ] = ( uint8_t ) ( ( ( val ) >> 8 ) & 0xFFU );  \
-        ( addr )[ 1 ] = ( uint8_t ) ( ( ( val ) >> 16 ) & 0xFFU ); \
-        ( addr )[ 0 ] = ( uint8_t ) ( ( ( val ) >> 24 ) & 0xFFU ); \
-    }
 
 /*-----------------------------------------------------------*/
 
@@ -528,19 +280,6 @@ static uint8_t * encodeRemainingLength( uint8_t * pDestination,
  * @return The size of the remaining length if it were to be encoded.
  */
 static size_t remainingLengthEncodedSize( size_t length );
-
-/**
- * @brief Encode a string whose size is at maximum 16 bits in length.
- *
- * @param[out] pDestination Destination buffer for the encoding.
- * @param[in] pSource The source string to encode.
- * @param[in] sourceLength The length of the source string to encode.
- *
- * @return A pointer to the end of the encoded string.
- */
-static uint8_t * encodeString( uint8_t * pDestination,
-                               const char * pSource,
-                               uint16_t sourceLength );
 
 /**
  * @brief Retrieves and decodes the Remaining Length from the network interface
@@ -674,21 +413,6 @@ static MQTTStatus_t deserializePublish( const MQTTPacketInfo_t * pIncomingPacket
                                         MQTTPublishInfo_t * pPublishInfo );
 
 /**
- * @brief Deserialize an UNSUBACK, PUBACK, PUBREC, PUBREL, or PUBCOMP packet.
- *
- * Converts the packet from a stream of bytes to an #MQTTStatus_t and extracts
- * the packet identifier.
- *
- * @param[in] pAck Pointer to the MQTT packet structure representing the packet.
- * @param[out] pPacketIdentifier Packet ID of the ack type packet.
- *
- * @return #MQTTSuccess if UNSUBACK, PUBACK, PUBREC, PUBREL, or PUBCOMP is valid;
- * #MQTTBadResponse if the packet doesn't follow the MQTT spec.
- */
-static MQTTStatus_t deserializeSimpleAck( const MQTTPacketInfo_t * pAck,
-                                          uint16_t * pPacketIdentifier );
-
-/**
  * @brief Deserialize a PINGRESP packet.
  *
  * Converts the packet from a stream of bytes to an #MQTTStatus_t.
@@ -718,88 +442,6 @@ static MQTTStatus_t validateConnackParams( const MQTTPacketInfo_t * pIncomingPac
                                            bool * pSessionPresent );
 
 /**
- * @brief Validate the length and decode a 4 byte value.
- *
- * @param[out] pProperty To store the decoded property.
- * @param[in, out] pPropertyLength  Value of the remaining property length.
- * @param[in, out] pUsed Whether the property is decoded before.
- * @param[in, out] pIndex Pointer to the current index of the buffer.
- *
- * @return #MQTTSuccess, #MQTTBadResponse
- **/
-static MQTTStatus_t decodeUint32t( uint32_t * pProperty,
-                                    size_t * pPropertyLength,
-                                    bool * pUsed,
-                                    uint8_t ** pIndex );
-
-/**
- * @brief Validate the length and decode a 2 byte value.
- *
- * @param[out] pProperty To store the decoded property.
- * @param[in, out] pPropertyLength  Value of the remaining property length.
- * @param[in, out] pUsed Whether the property is decoded before.
- * @param[in, out]  pIndex Pointer to the current index of the buffer.
- *
- * @return #MQTTSuccess, #MQTTBadResponse
- **/
-
-static MQTTStatus_t decodeUint16t( uint16_t * pProperty,
-                                    size_t * pPropertyLength,
-                                    bool * pUsed,
-                                    uint8_t ** pIndex );
-
-/**
- * @brief Validate the length and decode a 1 byte value.
- *
- * @param[out] pProperty To store the decoded property.
- * @param[in, out] pPropertyLength  Value of the remaining property length.
- * @param[in, out] pUsed Whether the property is decoded before.
- * @param[in, out]  pIndex Pointer to the current index of the buffer.
- *
- * @return #MQTTSuccess, #MQTTBadResponse
- **/
-static MQTTStatus_t decodeUint8t( uint8_t * pProperty,
-                                   size_t * pPropertyLength,
-                                   bool * pUsed,
-                                   uint8_t ** pIndex );
-
-/**
- * @brief Validate the length and decode a utf 8 string.
- *
- * @param[out] pProperty To store the decoded string.
- * @param[out] pLength  Size of the decoded utf-8 string.
- * @param[in, out] pPropertyLength  Value of the remaining property length.
- * @param[in, out] pUsed Whether the property is decoded before.
- * @param[in, out]  pIndex Pointer to the current index of the buffer.
- *
- * @return #MQTTSuccess, #MQTTBadResponse
- **/
-static MQTTStatus_t decodeUtf8( const char ** pProperty,
-                                 uint16_t * pLength,
-                                 size_t * pPropertyLength,
-                                 bool * pUsed,
-                                 uint8_t ** pIndex );
-
-/**
- * @brief Validate the length and decode a user property.
- *
- * @param[out] pPropertyKey To store the decoded key.
- * @param[out] pPropertyKeyLen To store the decoded key length.
- * @param[out] pPropertyValue To store the decoded value.
- * @param[out] pPropertyValueLen To store the decoded value length.
- * @param[in, out] pPropertyLength  Value of the remaining property length.
- * @param[in, out] pIndex Pointer to the current index of the buffer.
- *
- * @return #MQTTSuccess, #MQTTBadResponse
- **/
- static MQTTStatus_t decodeUserProp( const char ** pPropertyKey,
-                                     uint16_t * pPropertyKeyLen,
-                                     const char ** pPropertyValue,
-                                     uint16_t * pPropertyValueLen,
-                                     size_t * pPropertyLength,
-                                     uint8_t ** pIndex );
-
-/**
  * @brief Validate the length and decode the connack properties.
  *
  * @param[out] pConnackProperties To store the decoded property.
@@ -810,56 +452,9 @@ static MQTTStatus_t decodeUtf8( const char ** pProperty,
  * @return #MQTTSuccess, #MQTTBadResponse
  **/
 static MQTTStatus_t deserializeConnackProperties( MQTTConnectionProperties_t * pConnackProperties,
-                                                  size_t length,
+                                                  uint32_t length,
                                                   uint8_t * pIndex,
                                                   MQTTPropBuilder_t * pPropBuffer );
-
-/**
- * @brief Decodes the variable length by reading a single byte at a time.
- *
- * Uses the algorithm provided in the spec.
- *
- * @param[in] pBuffer Pointer to the buffer.
- * @param[in] bufferLength Length of the remaining buffer.
- * @param[out] pLength Decoded variable length
- *
- * @return #MQTTSuccess if variable length and paramters are valid else #MQTTBadResponse.
- */
-static MQTTStatus_t decodeVariableLength( const uint8_t * pBuffer,
-                                          size_t bufferLength,
-                                          size_t * pLength );
-
-/**
- * @brief Retrieve the size of the remaining length if it were to be encoded.
- *
- * @param[in] length The remaining length to be encoded.
- *
- * @return The size of the remaining length if it were to be encoded.
- */
-static size_t variableLengthEncodedSize( size_t length );
-
-/**
- * @brief Encode binary data whose size is at maximum 16 bits in length.
- *
- * @param[out] pDestination Destination buffer for the encoding.
- * @param[in] pSource The source binary data to encode.
- * @param[in] sourceLength The length of the source data to encode.
- *
- * @return A pointer to the end of the encoded binary data.
- */
-static uint8_t * encodeBinaryData( uint8_t * pDestination,
-                                   const void * pSource,
-                                   uint16_t sourceLength );
-
-/**
- * @brief Check whether the provided property is allowed for a packet type.
- *
- * @param[in] mqttPacketType Packet type to check.
- * @param[in] propBitLocation Bit location of the property.
- *
- * @return Whether the property is allowed for the packet type.
- */
-static bool isValidPropertyInPacketType( const uint8_t * mqttPacketType, uint8_t propBitLocation );
 
 /**
  * @brief Deserialize properties in the SUBACK packet received from the server.
@@ -952,38 +547,6 @@ static uint8_t * encodeRemainingLength( uint8_t * pDestination,
 
 /*-----------------------------------------------------------*/
 
-static uint8_t * encodeString( uint8_t * pDestination,
-                               const char * pSource,
-                               uint16_t sourceLength )
-{
-    uint8_t * pBuffer = NULL;
-
-    assert( pDestination != NULL );
-
-    pBuffer = pDestination;
-
-    /* The first byte of a UTF-8 string is the high byte of the string length. */
-    *pBuffer = UINT16_HIGH_BYTE( sourceLength );
-    pBuffer++;
-
-    /* The second byte of a UTF-8 string is the low byte of the string length. */
-    *pBuffer = UINT16_LOW_BYTE( sourceLength );
-    pBuffer++;
-
-    /* Copy the string into pBuffer. */
-    if( pSource != NULL )
-    {
-        ( void ) memcpy( ( void * ) pBuffer, ( const void * ) pSource, sourceLength );
-    }
-
-    /* Return the pointer to the end of the encoded string. */
-    pBuffer = &pBuffer[ sourceLength ];
-
-    return pBuffer;
-}
-
-/*-----------------------------------------------------------*/
-
 static bool calculatePublishPacketSize( const MQTTPublishInfo_t * pPublishInfo,
                                         size_t * pRemainingLength,
                                         size_t * pPacketSize )
@@ -1059,43 +622,6 @@ static bool calculatePublishPacketSize( const MQTTPublishInfo_t * pPublishInfo,
                 ( unsigned long ) *pRemainingLength,
                 ( unsigned long ) *pPacketSize ) );
     return status;
-}
-
-/*-----------------------------------------------------------*/
-
-static size_t variableLengthEncodedSize( size_t length )
-{
-    size_t encodedSize;
-
-    /* Determine how many bytes are needed to encode length.
-     * The values below are taken from the MQTT 5.0 spec. */
-
-    /* 1 byte is needed to encode lengths between 0 and 127. */
-    if( length < 128U )
-    {
-        encodedSize = 1U;
-    }
-    /* 2 bytes are needed to encode lengths between 128 and 16,383. */
-    else if( length < 16384U )
-    {
-        encodedSize = 2U;
-    }
-    /* 3 bytes are needed to encode lengths between 16,384 and 2,097,151. */
-    else if( length < 2097152U )
-    {
-        encodedSize = 3U;
-    }
-    /* 4 bytes are needed to encode lengths between 2,097,152 and 268,435,455. */
-    else
-    {
-        encodedSize = 4U;
-    }
-
-    LogDebug( ( "Encoded size for length %lu is %lu bytes.",
-                ( unsigned long ) length,
-                ( unsigned long ) encodedSize ) );
-
-    return encodedSize;
 }
 
 /*-----------------------------------------------------------*/
@@ -1397,6 +923,7 @@ static bool incomingPacketValid( uint8_t packetType )
         case MQTT_PACKET_TYPE_SUBACK:
         case MQTT_PACKET_TYPE_UNSUBACK:
         case MQTT_PACKET_TYPE_PINGRESP:
+        case MQTT_PACKET_TYPE_AUTH:
             status = true;
             break;
 
@@ -1746,7 +1273,7 @@ static MQTTStatus_t deserializeConnack( MQTTConnectionProperties_t * pConnackPro
                                  MQTTPropBuilder_t * pPropBuffer )
 {
     MQTTStatus_t status = MQTTSuccess;
-    size_t propertyLength = 0U;
+    uint32_t propertyLength = 0U;
     uint8_t * pVariableHeader = NULL;
     MQTTStatus_t statusCopy = MQTTSuccess;
 
@@ -2163,43 +1690,6 @@ static MQTTStatus_t deserializePublish( const MQTTPacketInfo_t * pIncomingPacket
 
 /*-----------------------------------------------------------*/
 
-static MQTTStatus_t deserializeSimpleAck( const MQTTPacketInfo_t * pAck,
-                                          uint16_t * pPacketIdentifier )
-{
-    MQTTStatus_t status = MQTTSuccess;
-
-    assert( pAck != NULL );
-    assert( pPacketIdentifier != NULL );
-
-    /* Check that the "Remaining length" of the received ACK is 2. */
-    if( pAck->remainingLength != MQTT_PACKET_SIMPLE_ACK_REMAINING_LENGTH )
-    {
-        LogError( ( "ACK does not have remaining length of %u.",
-                    ( unsigned int ) MQTT_PACKET_SIMPLE_ACK_REMAINING_LENGTH ) );
-
-        status = MQTTBadResponse;
-    }
-    else
-    {
-        /* Extract the packet identifier (third and fourth bytes) from ACK. */
-        *pPacketIdentifier = UINT16_DECODE( pAck->pRemainingData );
-
-        LogDebug( ( "Packet identifier %hu.",
-                    ( unsigned short ) *pPacketIdentifier ) );
-
-        /* Packet identifier cannot be 0. */
-        if( *pPacketIdentifier == 0U )
-        {
-            LogError( ( "Packet identifier cannot be 0." ) );
-            status = MQTTBadResponse;
-        }
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
 static MQTTStatus_t deserializePingresp( const MQTTPacketInfo_t * pPingresp )
 {
     MQTTStatus_t status = MQTTSuccess;
@@ -2220,313 +1710,14 @@ static MQTTStatus_t deserializePingresp( const MQTTPacketInfo_t * pPingresp )
 
 /*-----------------------------------------------------------*/
 
-static MQTTStatus_t decodeVariableLength( const uint8_t * pBuffer,
-                                          size_t bufferLength,
-                                          size_t * pLength )
-{
-    size_t remainingLength = 0;
-    size_t multiplier = 1;
-    size_t bytesDecoded = 0;
-    size_t expectedSize = 0;
-    uint8_t encodedByte = 0;
-    size_t localBufferLength = bufferLength;
-    MQTTStatus_t status = MQTTSuccess;
-
-    /* This algorithm is copied from the MQTT 5.0 spec. */
-    do
-    {
-        if( multiplier > 2097152U ) /* 128 ^ 3 */
-        {
-            remainingLength = MQTT_REMAINING_LENGTH_INVALID;
-
-            LogError( ( "Invalid remaining length in the packet.\n" ) );
-
-            status = MQTTBadResponse;
-        }
-        else
-        {
-            if( localBufferLength > 0U )
-            {
-                encodedByte = pBuffer[ bytesDecoded ];
-                remainingLength += ( ( size_t ) encodedByte & 0x7FU ) * multiplier;
-                multiplier *= 128U;
-                bytesDecoded++;
-                localBufferLength--;
-            }
-            else
-            {
-                status = MQTTBadResponse;
-            }
-        }
-
-        /* If the response is incorrect then
-         * break out of the loop. */
-        if( ( remainingLength == MQTT_REMAINING_LENGTH_INVALID ) ||
-            ( status != MQTTSuccess ) )
-        {
-            break;
-        }
-    } while( ( encodedByte & 0x80U ) != 0U );
-
-    if( status == MQTTSuccess )
-    {
-        /* Check that the decoded remaining length conforms to the MQTT specification. */
-        expectedSize = variableLengthEncodedSize( remainingLength );
-
-        if( bytesDecoded != expectedSize )
-        {
-            LogError( ( "Expected and actual length of decoded bytes do not match.\n" ) );
-            status = MQTTBadResponse;
-        }
-        else
-        {
-            *pLength = remainingLength;
-        }
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-static MQTTStatus_t decodeUint32t( uint32_t * pProperty,
-                                    size_t * pPropertyLength,
-                                    bool * pUsed,
-                                    uint8_t ** pIndex )
-{
-    uint8_t * pLocalIndex = *pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    /* Protocol error to include the same property twice. */
-    if( *pUsed == true )
-    {
-        status = MQTTBadResponse;
-    }
-    /* Validate the length and decode. */
-    else if( *pPropertyLength < sizeof( uint32_t ) )
-    {
-        status = MQTTBadResponse;
-    }
-    else
-    {
-        if( pProperty != NULL )
-        {
-            *pProperty = UINT32_DECODE( pLocalIndex );
-        }
-        pLocalIndex = &pLocalIndex[ sizeof( uint32_t ) ];
-        *pUsed = true;
-        *pPropertyLength -= sizeof( uint32_t );
-    }
-
-    *pIndex = pLocalIndex;
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-static MQTTStatus_t decodeUint16t( uint16_t * pProperty,
-                                    size_t * pPropertyLength,
-                                    bool * pUsed,
-                                    uint8_t ** pIndex )
-{
-    uint8_t * pLocalIndex = *pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    /* Protocol error to include the same property twice. */
-
-    if( *pUsed == true )
-    {
-        status = MQTTBadResponse;
-    }
-    /* Validate the length and decode. */
-
-    else if( *pPropertyLength < sizeof( uint16_t ) )
-    {
-        status = MQTTBadResponse;
-    }
-    else
-    {
-        if( pProperty != NULL )
-        {
-            *pProperty = UINT16_DECODE( pLocalIndex );
-        }
-        pLocalIndex = &pLocalIndex[ sizeof( uint16_t ) ];
-        *pUsed = true;
-        *pPropertyLength -= sizeof( uint16_t );
-    }
-
-    *pIndex = pLocalIndex;
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-static MQTTStatus_t decodeUint8t( uint8_t * pProperty,
-                                   size_t * pPropertyLength,
-                                   bool * pUsed,
-                                   uint8_t ** pIndex )
-{
-    uint8_t * pLocalIndex = *pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    /* Protocol error to include the same property twice. */
-
-    if( *pUsed == true )
-    {
-        status = MQTTBadResponse;
-    }
-    /* Validate the length and decode. */
-
-    else if( *pPropertyLength < sizeof( uint8_t ) )
-    {
-        status = MQTTBadResponse;
-    }
-    else
-    {
-        *pProperty = *pLocalIndex;
-        pLocalIndex = &pLocalIndex[ sizeof( uint8_t ) ];
-        *pUsed = true;
-        *pPropertyLength -= sizeof( uint8_t );
-
-        if( *pProperty > 1U )
-        {
-            status = MQTTBadResponse;
-        }
-    }
-
-    *pIndex = pLocalIndex;
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-static MQTTStatus_t decodeUtf8( const char ** pProperty,
-                                 uint16_t * pLength,
-                                 size_t * pPropertyLength,
-                                 bool * pUsed,
-                                 uint8_t ** pIndex )
-{
-    uint8_t * pLocalIndex = *pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    /* Protocol error to include the same property twice. */
-    if( *pUsed == true )
-    {
-        status = MQTTBadResponse;
-    }
-    /* Validate the length and decode. */
-    else if( *pPropertyLength < sizeof( uint16_t ) )
-    {
-        status = MQTTBadResponse;
-    }
-    else
-    {
-        *pLength = UINT16_DECODE( pLocalIndex );
-        pLocalIndex = &pLocalIndex[ sizeof( uint16_t ) ];
-        *pPropertyLength -= sizeof( uint16_t );
-
-        if( *pPropertyLength < *pLength )
-        {
-            status = MQTTBadResponse;
-        }
-        else
-        {
-            *pProperty = ( const char * ) pLocalIndex;
-            pLocalIndex = &pLocalIndex[ *pLength ];
-            *pPropertyLength -= *pLength;
-            *pUsed = true;
-        }
-    }
-
-    *pIndex = pLocalIndex;
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-static MQTTStatus_t decodeBinaryData( const void ** pProperty,
-                                      uint16_t * pLength,
-                                      size_t * pPropertyLength,
-                                      uint8_t ** pIndex )
-{
-    uint8_t * pLocalIndex = *pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    /* Validate the length and decode. */
-    if( *pPropertyLength < sizeof( uint16_t ) )
-    {
-        status = MQTTBadResponse;
-    }
-    else
-    {
-        *pLength = UINT16_DECODE( pLocalIndex );
-        pLocalIndex = &pLocalIndex[ sizeof( uint16_t ) ];
-        *pPropertyLength -= sizeof( uint16_t );
-
-        if( *pPropertyLength < *pLength )
-        {
-            status = MQTTBadResponse;
-        }
-        else
-        {
-            *pProperty = pLocalIndex;
-            pLocalIndex = &pLocalIndex[ *pLength ];
-            *pPropertyLength -= *pLength;
-        }
-    }
-
-    *pIndex = pLocalIndex;
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-static MQTTStatus_t decodeUserProp( const char ** pPropertyKey,
-                                    uint16_t * pPropertyKeyLen,
-                                    const char ** pPropertyValue,
-                                    uint16_t * pPropertyValueLen,
-                                    size_t * pPropertyLength,
-                                    uint8_t ** pIndex )
-{
-    MQTTStatus_t status = MQTTSuccess;
-    const char * pKey = NULL;
-    const char * pValue = NULL;
-    uint16_t keyLength = 0U;
-    uint16_t valueLength = 0U;
-    bool used = false;
-
-    /* Decode the user property key using decodeUtf8. */
-    status = decodeUtf8( &pKey, &keyLength, pPropertyLength, &used, pIndex );
-
-    if( status == MQTTSuccess )
-    {
-        used = false;
-        /* Decode the user property value using decodeUtf8. */
-        status = decodeUtf8( &pValue, &valueLength, pPropertyLength, &used, pIndex );
-    }
-
-    if( status == MQTTSuccess )
-    {
-        /* Store the decoded key and value. */
-        *pPropertyKey = pKey;
-        *pPropertyKeyLen = keyLength;
-        *pPropertyValue = pValue;
-        *pPropertyValueLen = valueLength;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
 static MQTTStatus_t deserializeConnackProperties( MQTTConnectionProperties_t * pConnackProperties,
-                                                  size_t length,
+                                                  uint32_t length,
                                                   uint8_t * pIndex,
                                                   MQTTPropBuilder_t * pPropBuffer )
 {
     MQTTStatus_t status = MQTTSuccess;
     uint8_t * pVariableHeader = pIndex;
-    size_t propertyLength = length;
+    uint32_t propertyLength = length;
     bool sessionExpiry = false;
     bool serverReceiveMax = false;
     bool maxQos = false;
@@ -2550,6 +1741,8 @@ static MQTTStatus_t deserializeConnackProperties( MQTTConnectionProperties_t * p
     {
         pPropBuffer->pBuffer = pVariableHeader;
         pPropBuffer->bufferLength = propertyLength;
+        pPropBuffer->currentIndex = propertyLength;
+        pPropBuffer->fieldSet = 0U;
     }
 
     /* Decode all the properties received, validate and store them in pConnackProperties. */
@@ -2568,68 +1761,108 @@ static MQTTStatus_t deserializeConnackProperties( MQTTConnectionProperties_t * p
             case MQTT_SESSION_EXPIRY_ID:
                 status = decodeUint32t( &pConnackProperties->sessionExpiry, &propertyLength,
                                          &sessionExpiry, &pVariableHeader );
+                if( status == MQTTSuccess )
+                {
+                    LogDebug( ( "Session expiry from server: %" PRIu32 , pConnackProperties->sessionExpiry ) );
+                    UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_SESSION_EXPIRY_INTERVAL_POS );
+                }
                 break;
 
             case MQTT_RECEIVE_MAX_ID:
                 status = decodeUint16t( &pConnackProperties->serverReceiveMax, &propertyLength,
                                          &serverReceiveMax, &pVariableHeader );
-
-                /* Receive max cannot be 0. */
-                if( ( status == MQTTSuccess ) && ( pConnackProperties->serverReceiveMax == 0U ) )
+                if( status == MQTTSuccess )
                 {
-                    LogError( ( "Receive Maximum value set to 0 by the server." ) );
-                    status = MQTTBadResponse;
+                    /* Receive max cannot be 0. */
+                    if( pConnackProperties->serverReceiveMax == 0U )
+                    {
+                        LogError( ( "Receive Maximum value set to 0 by the server." ) );
+                        status = MQTTBadResponse;
+                    }
+                    else
+                    {
+                        LogDebug( ( "Server receive maximum: %" PRIu16, pConnackProperties->serverReceiveMax ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_RECEIVE_MAXIMUM_POS );
+                    }
                 }
                 break;
 
             case MQTT_MAX_QOS_ID:
                 status = decodeUint8t( &pConnackProperties->serverMaxQos, &propertyLength,
                                         &maxQos, &pVariableHeader );
-
-                /* Protocol error for this value to be anything else except 0 or 1. */
-                if( ( status == MQTTSuccess ) && 
-                    ( pConnackProperties->serverMaxQos > 1U ) )
+                if( status == MQTTSuccess ) 
                 {
-                    LogError( ( "Invalid maximum QoS value set to %u (not 0 or 1) by the server.",
-                                pConnackProperties->serverMaxQos ) );
-                    status = MQTTBadResponse;
+                    /* Protocol error for this value to be anything else except 0 or 1. */
+                    if( pConnackProperties->serverMaxQos > 1U )
+                    {
+                        LogError( ( "Invalid maximum QoS value set to %" PRIu8 " (not 0 or 1) by the server.",
+                                    pConnackProperties->serverMaxQos ) );
+                        status = MQTTBadResponse;
+                    }
+                    else
+                    {
+                        LogDebug( ( "Server maximum QoS: %" PRIu8, pConnackProperties->serverMaxQos ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_MAX_QOS_POS );
+                    }
                 }
                 break;
 
             case MQTT_RETAIN_AVAILABLE_ID:
                 status = decodeUint8t( &pConnackProperties->retainAvailable, &propertyLength,
                                         &retain, &pVariableHeader );
-
-                /* Protocol error for this value to be anything else except 0 or 1. */
-                if( ( status == MQTTSuccess ) && 
-                    ( pConnackProperties->retainAvailable > 1U ) )
+                if(status == MQTTSuccess )
                 {
-                    LogError( ( "Invalid retain available value set by the server %u (not 0 or 1)",
-                                pConnackProperties->retainAvailable ) );
-                    status = MQTTBadResponse;
+                    /* Protocol error for this value to be anything else except 0 or 1. */
+                    if( pConnackProperties->retainAvailable > 1U )
+                    {
+                        LogError( ( "Invalid retain available value set by the server %" PRIu8 " (not 0 or 1)",
+                                    pConnackProperties->retainAvailable ) );
+                        status = MQTTBadResponse;
+                    }
+                    else
+                    {
+                        LogDebug( ( "Retain available: %" PRIu8, pConnackProperties->retainAvailable ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_RETAIN_AVAILABLE_POS );
+                    }
                 }
                 break;
 
             case MQTT_MAX_PACKET_SIZE_ID:
                 status = decodeUint32t( &pConnackProperties->serverMaxPacketSize, &propertyLength,
                                          &maxPacket, &pVariableHeader );
-
-                /* Protocol error for this value to be 0. */
-                if( ( status == MQTTSuccess ) && 
-                    ( pConnackProperties->serverMaxPacketSize == 0U ) )
+                if( status == MQTTSuccess )
                 {
-                    LogError( ( "Server set maximum packet size to 0. Invalid response." ) );
-                    status = MQTTBadResponse;
+                    /* Protocol error for this value to be 0. */
+                    if( pConnackProperties->serverMaxPacketSize == 0U )
+                    {
+                        LogError( ( "Server set maximum packet size to 0. Invalid response." ) );
+                        status = MQTTBadResponse;
+                    }
+                    else
+                    {
+                        LogDebug( ( "Server maximum packet size: %" PRIu32, pConnackProperties->serverMaxPacketSize ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_MAX_PACKET_SIZE_POS );
+                    }
                 }
                 break;
 
             case MQTT_ASSIGNED_CLIENT_ID:
                 status = decodeUtf8( &data, &dataLength, &propertyLength, &clientId, &pVariableHeader );
+                if( status == MQTTSuccess )
+                {
+                    LogDebug( ( "Assigned client ID: %.*s", ( int ) dataLength, data ) );
+                    UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_ASSIGNED_CLIENT_ID_POS );
+                }
                 break;
 
             case MQTT_TOPIC_ALIAS_MAX_ID:
                 status = decodeUint16t( &pConnackProperties->serverTopicAliasMax, &propertyLength,
                                          &topicAlias, &pVariableHeader );
+                if( status == MQTTSuccess )
+                {
+                    LogDebug( ( "Topic alias max ID: %" PRIu16, pConnackProperties->serverTopicAliasMax ) );
+                    UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_TOPIC_ALIAS_MAX_POS );
+                }
                 break;
 
             case MQTT_REASON_STRING_ID:
@@ -2639,6 +1872,7 @@ static MQTTStatus_t deserializeConnackProperties( MQTTConnectionProperties_t * p
                     /* Proper uses for the reason string in the Client would include using this information
                      * in an exception thrown by the Client code, or writing this string to a log. */
                     LogInfo( ( "Reason string from server: %.*s", dataLength, data ) );
+                    UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_REASON_STRING_POS );
                 }
                 break;
 
@@ -2647,66 +1881,99 @@ static MQTTStatus_t deserializeConnackProperties( MQTTConnectionProperties_t * p
                     const char * key, *value;
                     uint16_t keyLength, valueLength;
                     status = decodeUserProp( &key, &keyLength, &value, &valueLength, &propertyLength, &pVariableHeader );
+                    if( status == MQTTSuccess )
+                    {
+                        LogDebug( ( "User property: %.*s : %.*s", ( int ) keyLength, key, ( int ) valueLength, value ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_USER_PROP_POS );
+                    }
                 }
                 break;
 
             case MQTT_WILDCARD_ID:
                 status = decodeUint8t( &pConnackProperties->isWildcardAvailable, &propertyLength,
                                         &wildcard, &pVariableHeader );
-
-                /* Protocol error for this value to be anything except 0 or 1. */
-                if( ( status == MQTTSuccess ) && 
-                    ( pConnackProperties->isWildcardAvailable > 1U ) )
+                if( status == MQTTSuccess )
                 {
-                    LogError( ( "Server set wildcard value to %u (not 0 or 1). Invalid response.",
-                                pConnackProperties->isWildcardAvailable ) );
-                    status = MQTTBadResponse;
+                    /* Protocol error for this value to be anything except 0 or 1. */
+                    if( pConnackProperties->isWildcardAvailable > 1U )
+                    {
+                        LogError( ( "Server set wildcard value to %u (not 0 or 1). Invalid response.",
+                                    pConnackProperties->isWildcardAvailable ) );
+                        status = MQTTBadResponse;
+                    }
+                    else
+                    {
+                        LogDebug( ( "Wildcard subscription available: %s", pConnackProperties->isWildcardAvailable ? "Yes" : "No" ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_WILDCARD_SUBSCRIPTION_AVAILABLE_POS );
+                    }
                 }
                 break;
 
             case MQTT_SUB_AVAILABLE_ID:
                 status = decodeUint8t( &pConnackProperties->isSubscriptionIdAvailable, &propertyLength,
                                         &subId, &pVariableHeader );
-
-                /* Protocol error for this value to be anything except 0 or 1. */
-                if( ( status == MQTTSuccess ) && 
-                    ( pConnackProperties->isSubscriptionIdAvailable > 1U ) )
+                if( status == MQTTSuccess )
                 {
-                    LogError( ( "Server set subscription ID availability to %u (not 0 or 1). Invalid response.",
-                                pConnackProperties->isSubscriptionIdAvailable ) );
-                    status = MQTTBadResponse;
+                    /* Protocol error for this value to be anything except 0 or 1. */
+                    if( pConnackProperties->isSubscriptionIdAvailable > 1U )
+                    {
+                        LogError( ( "Server set subscription ID availability to %u (not 0 or 1). Invalid response.",
+                                    pConnackProperties->isSubscriptionIdAvailable ) );
+                        status = MQTTBadResponse;
+                    }
+                    else
+                    {
+                        LogDebug( ( "Subscription ID available: %s", pConnackProperties->isSubscriptionIdAvailable ? "Yes" : "No" ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_SUBSCRIPTION_ID_AVAILABLE_POS );
+                    }
                 }
                 break;
 
             case MQTT_SHARED_SUB_ID:
                 status = decodeUint8t( &pConnackProperties->isSharedAvailable, &propertyLength,
                                        &sharedsub, &pVariableHeader );
-
-                /* Protocol error for this value to be anything except 0 or 1. */
-                if( ( status == MQTTSuccess ) && 
-                    ( pConnackProperties->isSharedAvailable > 1U ) )
+                if( status == MQTTSuccess )
                 {
-                    LogError( ( "Server set shared sub availability to %u (not 0 or 1). Invalid response.",
-                                pConnackProperties->isSharedAvailable ) );
-                    status = MQTTBadResponse;
+                    /* Protocol error for this value to be anything except 0 or 1. */
+                    if( pConnackProperties->isSharedAvailable > 1U )
+                    {
+                        LogError( ( "Server set shared sub availability to %u (not 0 or 1). Invalid response.",
+                                    pConnackProperties->isSharedAvailable ) );
+                        status = MQTTBadResponse;
+                    }
+                    else
+                    {
+                        LogDebug( ( "Shared subscription available: %s", pConnackProperties->isSharedAvailable ? "Yes" : "No" ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_SHARED_SUBSCRIPTION_AVAILABLE_POS );
+                    }
                 }
                 break;
 
             case MQTT_SERVER_KEEP_ALIVE_ID:
                 status = decodeUint16t( &pConnackProperties->serverKeepAlive, &propertyLength,
                                          &keepAlive, &pVariableHeader );
+                if( status == MQTTSuccess )
+                {
+                    LogDebug( ( "Server keep alive: %d", ( int ) pConnackProperties->serverKeepAlive ) );
+                    UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_SERVER_KEEP_ALIVE_POS );
+                }
                 break;
 
             case MQTT_RESPONSE_INFO_ID:
                 status = decodeUtf8( &data, &dataLength, &propertyLength, &responseInfo, &pVariableHeader );
-
-                /* TODO: Decide if this should be somehow passed to the application. */
-
-                /* Protocol error to send response information if the client has not requested it. */
-                if( ( status == MQTTSuccess ) && ( pConnackProperties->requestResponseInfo == false ) )
+                if( status == MQTTSuccess )
                 {
-                    LogError( ( "Client did not request information still server sent it. Protocol error." ) );
-                    status = MQTTBadResponse;
+                    /* Protocol error to send response information if the client has not requested it. */
+                    if( pConnackProperties->requestResponseInfo == false )
+                    {
+                        LogError( ( "Client did not request information still server sent it. Protocol error." ) );
+                        status = MQTTBadResponse;
+                    }
+                    else
+                    {
+                        LogDebug( ( "Response information: %.*s", dataLength, data ) );
+                        UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_RESPONSE_INFORMATION_POS );
+                    }
                 }
                 break;
 
@@ -2714,18 +1981,29 @@ static MQTTStatus_t deserializeConnackProperties( MQTTConnectionProperties_t * p
                 status = decodeUtf8( &data, &dataLength, &propertyLength, &serverReference, &pVariableHeader );
                 if( status == MQTTSuccess )
                 {
-                    LogInfo( ( "Server reference: %.*s", dataLength, data ) );
+                    LogDebug( ( "Server reference: %.*s", dataLength, data ) );
+                    UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_SERVER_REFERENCE_POS );
                 }
                 break;
 
             case MQTT_AUTH_METHOD_ID:
                 status = decodeUtf8( &data, &dataLength, &propertyLength, &authMethod, &pVariableHeader );
+                if( status == MQTTSuccess )
+                {
+                    LogDebug( ( "Authentication method received: %.*s", dataLength, data ) );
+                    UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_AUTHENTICATION_METHOD_POS );
+                }
                 /* TODO: AUTH method should be returned to the application to allow the
                  * authentication to complete. */
                 break;
 
             case MQTT_AUTH_DATA_ID:
                 status = decodeUtf8( &data, &dataLength, &propertyLength, &authData, &pVariableHeader );
+                if( status == MQTTSuccess )
+                {
+                    LogDebug( ( "Auth data received: %.*s", dataLength, data ) );
+                    UINT32_SET_BIT( pPropBuffer->fieldSet, MQTT_AUTHENTICATION_DATA_POS );
+                }
                 /* TODO: AUTH Data should be returned to the application to allow the
                  * authentication to complete. */
                 break;
@@ -2742,216 +2020,13 @@ static MQTTStatus_t deserializeConnackProperties( MQTTConnectionProperties_t * p
 
 /*-----------------------------------------------------------*/
 
-static uint8_t * encodeBinaryData( uint8_t * pDestination,
-                                   const void * pSource,
-                                   uint16_t sourceLength )
-{
-    uint8_t * pBuffer = NULL;
-
-    /* Typecast const char * typed source buffer to const uint8_t *.
-     * This is to use same type buffers in memcpy. */
-    const uint8_t * pSourceBuffer = ( const uint8_t * ) pSource;
-
-    assert( pDestination != NULL );
-    assert( pSource != NULL );
-
-    pBuffer = pDestination;
-
-    /* The first byte of a UTF-8 string is the high byte of the string length. */
-    *pBuffer = UINT16_HIGH_BYTE( sourceLength );
-    pBuffer++;
-
-    /* The second byte of a UTF-8 string is the low byte of the string length. */
-    *pBuffer = UINT16_LOW_BYTE( sourceLength );
-    pBuffer++;
-
-    /* Copy the string into pBuffer. */
-
-    ( void ) memcpy( pBuffer, pSourceBuffer, sourceLength );
-
-    /* Return the pointer to the end of the encoded string. */
-    pBuffer = &pBuffer[ sourceLength ];
-
-    return pBuffer;
-}
-
-/*-----------------------------------------------------------*/
-
-static bool isValidPropertyInPacketType( const uint8_t * mqttPacketType, uint8_t propBitLocation )
-{
-    bool isAllowed = false;
-    uint32_t allowedPropertiesMask = 0U;
-
-    switch( *mqttPacketType )
-    {
-        case MQTT_PACKET_TYPE_CONNECT:
-            /* CONNECT properties:
-             * - Session Expiry Interval
-             * - Receive Maximum
-             * - Maximum Packet Size
-             * - Topic Alias Maximum
-             * - Request Response Information
-             * - Request Problem Information
-             * - User Property
-             * - Authentication Method
-             * - Authentication Data
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SESSION_EXPIRY_INTERVAL_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_RECEIVE_MAXIMUM_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_MAX_PACKET_SIZE_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_TOPIC_ALIAS_MAX_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_REQUEST_RESPONSE_INFO_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_REQUEST_PROBLEM_INFO_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_AUTHENTICATION_METHOD_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_AUTHENTICATION_DATA_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_CONNACK:
-            /* CONNACK properties:
-             * - Session Expiry Interval
-             * - Receive Maximum
-             * - Maximum QoS
-             * - Retain Available
-             * - Maximum Packet Size
-             * - Assigned Client Identifier
-             * - Topic Alias Maximum
-             * - Reason String
-             * - User Property
-             * - Wildcard Subscription Available
-             * - Subscription Identifier Available
-             * - Shared Subscription Available
-             * - Server Keep Alive
-             * - Response Information
-             * - Server Reference
-             * - Authentication Method
-             * - Authentication Data
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SESSION_EXPIRY_INTERVAL_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_RECEIVE_MAXIMUM_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_MAXIMUM_QOS_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_RETAIN_AVAILABLE_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_MAX_PACKET_SIZE_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_ASSIGNED_CLIENT_ID_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_TOPIC_ALIAS_MAX_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_REASON_STRING_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_WILDCARD_SUBSCRIPTION_AVAILABLE_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SUBSCRIPTION_ID_AVAILABLE_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SHARED_SUBSCRIPTION_AVAILABLE_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SERVER_KEEP_ALIVE_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_RESPONSE_INFORMATION_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SERVER_REFERENCE_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_AUTHENTICATION_METHOD_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_AUTHENTICATION_DATA_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_PUBLISH:
-            /* PUBLISH properties:
-             * - Payload Format Indicator
-             * - Message Expiry Interval
-             * - Topic Alias
-             * - Response Topic
-             * - Correlation Data
-             * - User Property
-             * - Subscription Identifier (only in server-to-client PUBLISH)
-             * - Content Type
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_PAYLOAD_FORMAT_INDICATOR_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_MESSAGE_EXPIRY_INTERVAL_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_TOPIC_ALIAS_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_RESPONSE_TOPIC_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_CORRELATION_DATA_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SUBSCRIPTION_ID_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_CONTENT_TYPE_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_PUBACK:
-        case MQTT_PACKET_TYPE_PUBREC:
-        case MQTT_PACKET_TYPE_PUBREL:
-        case MQTT_PACKET_TYPE_PUBCOMP:
-            /* PUBACK, PUBREC, PUBREL, PUBCOMP properties:
-             * - Reason String
-             * - User Property
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_REASON_STRING_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_SUBSCRIBE:
-            /* SUBSCRIBE properties:
-             * - Subscription Identifier
-             * - User Property
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SUBSCRIPTION_ID_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_SUBACK:
-            /* SUBACK properties:
-             * - Reason String
-             * - User Property
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_REASON_STRING_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_UNSUBSCRIBE:
-            /* UNSUBSCRIBE properties:
-             * - User Property
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_UNSUBACK:
-            /* UNSUBACK properties:
-             * - Reason String
-             * - User Property
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_REASON_STRING_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_DISCONNECT:
-            /* DISCONNECT properties:
-             * - Session Expiry Interval
-             * - Reason String
-             * - User Property
-             * - Server Reference
-             */
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SESSION_EXPIRY_INTERVAL_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_REASON_STRING_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_USER_PROP_POS );
-            UINT32_SET_BIT( allowedPropertiesMask, MQTT_SERVER_REFERENCE_POS );
-            break;
-
-        case MQTT_PACKET_TYPE_PINGREQ:
-        case MQTT_PACKET_TYPE_PINGRESP:
-            /* PINGREQ and PINGRESP have no properties section.
-             * allowedPropertiesMask remains 0. */
-            break;
-
-        default:
-            /* Unknown packet type - no properties allowed. */
-            break;
-    }
-
-    /* Check if the property bit is set in the allowed mask. */
-    isAllowed = UINT32_CHECK_BIT( allowedPropertiesMask, propBitLocation );
-
-    return isAllowed;
-}
-
-/*-----------------------------------------------------------*/
-
 static MQTTStatus_t deserializeSubackProperties( MQTTPropBuilder_t * pPropBuffer,
                                                  uint8_t * pIndex,
                                                  size_t * pSubackPropertyLength,
                                                  size_t remainingLength )
 {
     MQTTStatus_t status = MQTTSuccess;
-    size_t propertyLength = 0U;
+    uint32_t propertyLength = 0U;
     uint8_t * pLocalIndex = pIndex;
     const char * pReasonString;
     uint16_t reasonStringLength;
@@ -3155,11 +2230,11 @@ static void serializeConnectPacket( const MQTTConnectInfo_t * pConnectInfo,
 /*-----------------------------------------------------------*/
 
 uint8_t * encodeVariableLength( uint8_t * pDestination,
-                                size_t length )
+                                uint32_t length )
 {
     uint8_t lengthByte;
     uint8_t * pLengthEnd = NULL;
-    size_t remainingLength = length;
+    uint32_t remainingLength = length;
 
     assert( pDestination != NULL );
 
@@ -3213,7 +2288,7 @@ MQTTStatus_t updateContextWithConnectProps( const MQTTPropBuilder_t * pPropBuild
         bool sessionExpiry = false;
         bool receiveMax = false;
         bool topicAlias = false;
-        size_t propertyLength = 0U;
+        uint32_t propertyLength = 0U;
         uint8_t * pIndex;
 
         propertyLength = pPropBuilder->currentIndex;
@@ -4486,7 +3561,7 @@ MQTTStatus_t MQTTPropertyBuilder_Init( MQTTPropBuilder_t * pPropertyBuilder,
 MQTTStatus_t MQTT_ValidateWillProperties( const MQTTPropBuilder_t * pPropertyBuilder )
 {
     MQTTStatus_t status = MQTTSuccess;
-    size_t propertyLength = 0U;
+    uint32_t propertyLength = 0U;
     uint8_t * pIndex = NULL;
 
     if( ( pPropertyBuilder == NULL ) || ( pPropertyBuilder->pBuffer == NULL ) )
@@ -4631,7 +3706,7 @@ MQTTStatus_t MQTT_ValidateConnectProperties( const MQTTPropBuilder_t * pProperty
                                              bool * isRequestProblemInfoSet )
 {
     MQTTStatus_t status = MQTTSuccess;
-    size_t propertyLength = 0U;
+    uint32_t propertyLength = 0U;
     uint8_t * pIndex = NULL;
 
     if( ( pPropertyBuilder == NULL ) || 
@@ -4844,1009 +3919,13 @@ MQTTStatus_t MQTT_ValidateConnectProperties( const MQTTPropBuilder_t * pProperty
 
 /*-----------------------------------------------------------*/
 
-MQTTStatus_t MQTTPropAdd_SubscribeId( MQTTPropBuilder_t * pPropertyBuilder,
-                                      size_t subscriptionId,
-                                      const uint8_t * pOptionalMqttPacketType )
-{
-    MQTTStatus_t status = MQTTSuccess;
-    uint8_t * pIndex;
-
-    if( subscriptionId == 0U )
-    {
-        LogError( ( "Subscription Id cannot be 0 for subscribe properties: Protocol Error." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_SUBSCRIPTION_ID_POS ) )
-    {
-        LogError( ( "Subscription Id already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_SUBSCRIPTION_ID_POS ) == false ) )
-    {
-        LogError( ( "Subscription Id not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) +
-               variableLengthEncodedSize( subscriptionId ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add subscription id." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_SUBSCRIPTION_ID_ID;
-        pIndex++;
-        pIndex = encodeVariableLength( pIndex, subscriptionId );
-        /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
-        /* coverity[misra_c_2012_rule_10_8_violation] */
-        pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ] );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_SUBSCRIPTION_ID_POS );
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_UserProp( MQTTPropBuilder_t * pPropertyBuilder,
-                                   const MQTTUserProperty_t * userProperty,
-                                   const uint8_t * pOptionalMqttPacketType )
-{
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( userProperty == NULL )
-    {
-        LogError( ( "Argument userProperty cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( userProperty->pKey == NULL ) ||
-             ( userProperty->pValue == NULL ) ||
-             ( userProperty->keyLength == 0U ) ||
-             ( userProperty->valueLength == 0U ) )
-    {
-        LogError( ( "Arguments cannot be NULL: pUserProperties->userProperty->pKey=%p, "
-                    "pUserProperties->userProperty->pValue=%p, "
-                    "Key Length = %u, Value Length = %u",
-                    ( void * ) userProperty->pKey,
-                    ( void * ) userProperty->pValue,
-                    userProperty->keyLength,
-                    userProperty->valueLength ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_USER_PROP_POS ) == false ) )
-    {
-        LogError( ( "User property not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + userProperty->keyLength +
-               userProperty->valueLength + sizeof( uint16_t ) + sizeof( uint16_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        const uint8_t * start = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        uint8_t * pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-
-        *pIndex = MQTT_USER_PROPERTY_ID;
-        pIndex++;
-
-        /* Encoding key. */
-        pIndex = encodeString( pIndex, userProperty->pKey, userProperty->keyLength );
-        pIndex = encodeString( pIndex, userProperty->pValue, userProperty->valueLength );
-        /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
-        /* coverity[misra_c_2012_rule_10_8_violation] */
-        pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - start );
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_SessionExpiry( MQTTPropBuilder_t * pPropertyBuilder,
-                                        uint32_t sessionExpiry,
-                                        const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder=%p.", ( void * ) pPropertyBuilder ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder->pBuffer=%p.",
-                    ( void * ) pPropertyBuilder->pBuffer ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_SESSION_EXPIRY_INTERVAL_POS ) )
-    {
-        LogError( ( "Connect Session Expiry Already Set" ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_SESSION_EXPIRY_INTERVAL_POS ) == false ) )
-    {
-        LogError( ( "Connect Session Expiry not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint32_t ) + sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property" ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_SESSION_EXPIRY_ID;
-        pIndex++;
-        WRITE_UINT32( &( pIndex[ 0 ] ), sessionExpiry );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_SESSION_EXPIRY_INTERVAL_POS );
-        pPropertyBuilder->currentIndex += 5U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_ConnReceiveMax( MQTTPropBuilder_t * pPropertyBuilder,
-                                         uint16_t receiveMax,
-                                         const uint8_t * pOptionalMqttPacketType )
-{
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( receiveMax == 0U ) || ( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_RECEIVE_MAXIMUM_POS ) ) )
-    {
-        LogError( ( "Invalid arguments passed to MQTTPropAdd_ConnReceiveMax." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_RECEIVE_MAXIMUM_POS ) == false ) )
-    {
-        LogError( ( "Receive Maximum not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint16_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        uint8_t * pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_RECEIVE_MAX_ID;
-        pIndex++;
-        pIndex[ 0 ] = UINT16_HIGH_BYTE( receiveMax );
-        pIndex[ 1 ] = UINT16_LOW_BYTE( receiveMax );
-        pIndex = &pIndex[ 2 ];
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_RECEIVE_MAXIMUM_POS );
-        pPropertyBuilder->currentIndex += 3U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_ConnMaxPacketSize( MQTTPropBuilder_t * pPropertyBuilder,
-                                            uint32_t maxPacketSize,
-                                            const uint8_t * pOptionalMqttPacketType )
-{
-    MQTTStatus_t status = MQTTSuccess;
-    uint8_t * pIndex;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( maxPacketSize == 0U )
-    {
-        LogError( ( "Max packet size cannot be set to 0." ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_MAX_PACKET_SIZE_POS ) )
-    {
-        LogError( ( "Max packet size already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_MAX_PACKET_SIZE_POS ) == false ) )
-    {
-        LogError( ( "Max packet size not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint32_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property" ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_MAX_PACKET_SIZE_ID;
-        pIndex++;
-        WRITE_UINT32( &( pIndex[ 0 ] ), maxPacketSize );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_MAX_PACKET_SIZE_POS );
-        pPropertyBuilder->currentIndex += 5U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_ConnTopicAliasMax( MQTTPropBuilder_t * pPropertyBuilder,
-                                            uint16_t topicAliasMax,
-                                            const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder=%p.", ( void * ) pPropertyBuilder ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder->pBuffer=%p.",
-                    ( void * ) pPropertyBuilder->pBuffer ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_TOPIC_ALIAS_MAX_POS ) )
-    {
-        LogError( ( "Topic Alias Maximum already set. " ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_TOPIC_ALIAS_MAX_POS ) == false ) )
-    {
-        LogError( ( "Topic Alias Maximum not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint16_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property" ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_TOPIC_ALIAS_MAX_ID;
-        pIndex++;
-        pIndex[ 0 ] = UINT16_HIGH_BYTE( topicAliasMax );
-        pIndex[ 1 ] = UINT16_LOW_BYTE( topicAliasMax );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_TOPIC_ALIAS_MAX_POS );
-        pPropertyBuilder->currentIndex += 3U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_ConnRequestRespInfo( MQTTPropBuilder_t * pPropertyBuilder,
-                                              bool requestResponseInfo,
-                                              const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder=%p.", ( void * ) pPropertyBuilder ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder->pBuffer=%p.",
-                    ( void * ) pPropertyBuilder->pBuffer ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_REQUEST_RESPONSE_INFO_POS ) )
-    {
-        LogError( ( "Request Response Info already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_REQUEST_RESPONSE_INFO_POS ) == false ) )
-    {
-        LogError( ( "Request Response Info not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property" ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_REQUEST_RESPONSE_ID;
-        pIndex++;
-        *pIndex = ( requestResponseInfo ? 1U : 0U );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_REQUEST_RESPONSE_INFO_POS );
-        pPropertyBuilder->currentIndex += 2U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_ConnRequestProbInfo( MQTTPropBuilder_t * pPropertyBuilder,
-                                              bool requestProblemInfo,
-                                              const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_REQUEST_PROBLEM_INFO_POS ) )
-    {
-        LogError( ( "Request Problem Info already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_REQUEST_PROBLEM_INFO_POS ) == false ) )
-    {
-        LogError( ( "Request Problem Info not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_REQUEST_RESPONSE_ID;
-        pIndex++;
-        *pIndex = ( requestProblemInfo ? 1U : 0U );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_REQUEST_PROBLEM_INFO_POS );
-        pPropertyBuilder->currentIndex += 2U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_ConnAuthMethod( MQTTPropBuilder_t * pPropertyBuilder,
-                                         const char * authMethod,
-                                         uint16_t authMethodLength,
-                                         const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( ( pPropertyBuilder == NULL ) || ( authMethod == NULL ) || ( authMethodLength == 0U ) )
-    {
-        LogError( ( "Arguments cannot be NULL: pPropertyBuilder=%p, authMethod = %p, authMethodLength = %u", ( void * ) pPropertyBuilder, ( void * ) authMethod, authMethodLength ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_AUTHENTICATION_METHOD_POS ) )
-    {
-        LogError( ( "Auth Method already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_AUTHENTICATION_METHOD_POS ) == false ) )
-    {
-        LogError( ( "Auth Method not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) + authMethodLength +
-               sizeof( uint16_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_AUTH_METHOD_ID;
-        pIndex++;
-        pIndex = encodeString( pIndex, authMethod, authMethodLength );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_AUTHENTICATION_METHOD_POS );
-        /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
-        /* coverity[misra_c_2012_rule_10_8_violation] */
-        pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - ( &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ] ) );
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_ConnAuthData( MQTTPropBuilder_t * pPropertyBuilder,
-                                       const char * authData,
-                                       uint16_t authDataLength,
-                                       const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( ( pPropertyBuilder == NULL ) || ( authData == NULL ) || ( authDataLength == 0U ) )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder=%p, authMethod = %p, authMethodLength = %u",
-                    ( void * ) pPropertyBuilder, ( void * ) authData, authDataLength ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) + authDataLength +
-               sizeof( uint16_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_AUTHENTICATION_METHOD_POS ) == false )
-    {
-        LogError( ( "Auth method must be added before authentication data. "
-                    "Not a protocol violation but a practice enforced by coreMQTT." ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_AUTHENTICATION_DATA_POS ) )
-    {
-        LogError( ( "Invalid Auth data." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_AUTHENTICATION_DATA_POS ) == false ) )
-    {
-        LogError( ( "Auth data not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_AUTH_DATA_ID;
-        pIndex++;
-        pIndex = encodeString( pIndex, authData, authDataLength );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_AUTHENTICATION_DATA_POS );
-        /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
-        /* coverity[misra_c_2012_rule_10_8_violation] */
-        pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - ( &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ] ) );
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_PubPayloadFormat( MQTTPropBuilder_t * pPropertyBuilder,
-                                           bool payloadFormat,
-                                           const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_PAYLOAD_FORMAT_INDICATOR_POS ) ) )
-    {
-        LogError( ( "Payload Format already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_PAYLOAD_FORMAT_INDICATOR_POS ) == false ) )
-    {
-        LogError( ( "Payload Format not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_PAYLOAD_FORMAT_ID;
-        pIndex++;
-        *pIndex = ( uint8_t ) ( payloadFormat ? 1U : 0U );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_PAYLOAD_FORMAT_INDICATOR_POS );
-        pPropertyBuilder->currentIndex += 2U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_PubMessageExpiry( MQTTPropBuilder_t * pPropertyBuilder,
-                                           uint32_t messageExpiry,
-                                           const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_MESSAGE_EXPIRY_INTERVAL_POS ) ) )
-    {
-        LogError( ( "Message Expiry Interval already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_MESSAGE_EXPIRY_INTERVAL_POS ) == false ) )
-    {
-        LogError( ( "Message Expiry Interval not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint32_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_MSG_EXPIRY_ID;
-        pIndex++;
-        WRITE_UINT32( &( pIndex[ 0 ] ), messageExpiry );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_MESSAGE_EXPIRY_INTERVAL_POS );
-        pPropertyBuilder->currentIndex += 5U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_WillDelayInterval( MQTTPropBuilder_t * pPropertyBuilder,
-                                            uint32_t willDelayInterval,
-                                            const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_WILL_DELAY_POS ) ) )
-    {
-        LogError( ( "Message Expiry Interval already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_WILL_DELAY_POS ) == false ) )
-    {
-        LogError( ( "Message Expiry Interval not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint32_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_WILL_DELAY_ID;
-        pIndex++;
-        WRITE_UINT32( &( pIndex[ 0 ] ), willDelayInterval );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_WILL_DELAY_POS );
-        pPropertyBuilder->currentIndex += 5U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_PubTopicAlias( MQTTPropBuilder_t * pPropertyBuilder,
-                                        uint16_t topicAlias,
-                                        const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder=%p.", ( void * ) pPropertyBuilder ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Arguments cannot be NULL : pPropertyBuilder->pBuffer=%p.",
-                    ( void * ) pPropertyBuilder->pBuffer ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_TOPIC_ALIAS_POS ) )
-    {
-        LogError( ( "TopicAlias already present" ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_TOPIC_ALIAS_POS ) == false ) )
-    {
-        LogError( ( "TopicAlias not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( topicAlias == 0U )
-    {
-        LogError( ( "Topic Alias cannot be 0" ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint16_t ) +
-               sizeof( uint8_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property" ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_TOPIC_ALIAS_ID;
-        pIndex++;
-        pIndex[ 0 ] = UINT16_HIGH_BYTE( topicAlias );
-        pIndex[ 1 ] = UINT16_LOW_BYTE( topicAlias );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_TOPIC_ALIAS_POS );
-        pPropertyBuilder->currentIndex += 3U;
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_PubResponseTopic( MQTTPropBuilder_t * pPropertyBuilder,
-                                           const char * responseTopic,
-                                           uint16_t responseTopicLength,
-                                           const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( responseTopic == NULL )
-    {
-        LogError( ( "Argument responseTopic cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( responseTopicLength == 0U )
-    {
-        LogError( ( "Response Topic Length cannot be 0" ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_RESPONSE_TOPIC_POS ) ) )
-    {
-        LogError( ( "Response Topic already set" ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_RESPONSE_TOPIC_POS ) == false ) )
-    {
-        LogError( ( "Response Topic not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( strchr( responseTopic, ( int32_t ) '#' ) != NULL ) ||
-             ( strchr( responseTopic, ( int32_t ) '+' ) != NULL ) )
-    {
-        LogError( ( "Protocol Error: Response Topic contains wildcards." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) + responseTopicLength +
-               sizeof( uint16_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_RESPONSE_TOPIC_ID;
-        pIndex++;
-        pIndex = encodeString( pIndex, responseTopic, responseTopicLength );
-        /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
-        /* coverity[misra_c_2012_rule_10_8_violation] */
-        pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - ( &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ] ) );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_RESPONSE_TOPIC_POS );
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_PubCorrelationData( MQTTPropBuilder_t * pPropertyBuilder,
-                                             const void * pCorrelationData,
-                                             uint16_t correlationLength,
-                                             const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pCorrelationData == NULL )
-    {
-        LogError( ( "Argument pCorrelationData cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( correlationLength == 0U )
-    {
-        LogError( ( "Correlation Data Length cannot be 0." ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_CORRELATION_DATA_POS ) )
-    {
-        LogError( ( "Correlation Data already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_CORRELATION_DATA_POS ) == false ) )
-    {
-        LogError( ( "Correlation Data not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) + correlationLength +
-               sizeof( uint16_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_CORRELATION_DATA_ID;
-        pIndex++;
-        pIndex = encodeBinaryData( pIndex, pCorrelationData, correlationLength );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_CORRELATION_DATA_POS );
-        /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
-        /* coverity[misra_c_2012_rule_10_8_violation] */
-        pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - ( &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ] ) );
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_PubContentType( MQTTPropBuilder_t * pPropertyBuilder,
-                                         const char * contentType,
-                                         uint16_t contentTypeLength,
-                                         const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( contentType == NULL )
-    {
-        LogError( ( "Argument contentType cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( contentTypeLength == 0U )
-    {
-        LogError( ( "Content Type Length cannot be 0." ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_CONTENT_TYPE_POS ) )
-    {
-        LogError( ( "Content type already set" ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_CONTENT_TYPE_POS ) == false ) )
-    {
-        LogError( ( "Content type not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) + contentTypeLength +
-               sizeof( uint16_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_CONTENT_TYPE_ID;
-        pIndex++;
-        pIndex = encodeString( pIndex, contentType, contentTypeLength );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_CONTENT_TYPE_POS );
-        /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
-        /* coverity[misra_c_2012_rule_10_8_violation] */
-        pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - ( &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ] ) );
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
-MQTTStatus_t MQTTPropAdd_ReasonString( MQTTPropBuilder_t * pPropertyBuilder,
-                                       const char * pReasonString,
-                                       uint16_t reasonStringLength,
-                                       const uint8_t * pOptionalMqttPacketType )
-{
-    uint8_t * pIndex;
-    MQTTStatus_t status = MQTTSuccess;
-
-    if( pPropertyBuilder == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pPropertyBuilder->pBuffer == NULL )
-    {
-        LogError( ( "Argument pPropertyBuilder->pBuffer cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( pReasonString == NULL )
-    {
-        LogError( ( "Argument pReasonString cannot be NULL." ) );
-        status = MQTTBadParameter;
-    }
-    else if( reasonStringLength == 0U )
-    {
-        LogError( ( "Reason String Length cannot be 0." ) );
-        status = MQTTBadParameter;
-    }
-    else if( UINT32_CHECK_BIT( pPropertyBuilder->fieldSet, MQTT_REASON_STRING_POS ) )
-    {
-        LogError( ( "Reason String already set." ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pOptionalMqttPacketType != NULL ) &&
-             ( isValidPropertyInPacketType( pOptionalMqttPacketType, MQTT_REASON_STRING_POS ) == false ) )
-    {
-        LogError( ( "Reason String not allowed in %d packet type.", *pOptionalMqttPacketType ) );
-        status = MQTTBadParameter;
-    }
-    else if( ( pPropertyBuilder->currentIndex + sizeof( uint8_t ) + reasonStringLength +
-               sizeof( uint16_t ) ) > pPropertyBuilder->bufferLength )
-    {
-        LogError( ( "Buffer too small to add property." ) );
-        status = MQTTNoMemory;
-    }
-    else
-    {
-        pIndex = &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ];
-        *pIndex = MQTT_REASON_STRING_ID;
-        pIndex++;
-        pIndex = encodeString( pIndex, pReasonString, reasonStringLength );
-        UINT32_SET_BIT( pPropertyBuilder->fieldSet, MQTT_REASON_STRING_POS );
-        /* More details at: https://github.com/FreeRTOS/coreMQTT/blob/main/MISRA.md#rule-108 */
-        /* coverity[misra_c_2012_rule_10_8_violation] */
-        pPropertyBuilder->currentIndex += ( size_t ) ( pIndex - ( &pPropertyBuilder->pBuffer[ pPropertyBuilder->currentIndex ] ) );
-    }
-
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-
 MQTTStatus_t MQTT_ValidateSubscribeProperties( bool isSubscriptionIdAvailable,
                                                const MQTTPropBuilder_t * propBuilder )
 {
     MQTTStatus_t status = MQTTSuccess;
-    size_t propertyLength = 0U;
+    uint32_t propertyLength = 0U;
     uint8_t * pLocalIndex = NULL;
-    size_t subscriptionId = 0;
+    uint32_t subscriptionId = 0;
 
     if( ( propBuilder == NULL ) || ( propBuilder->pBuffer == NULL ) )
     {
@@ -5880,7 +3959,6 @@ MQTTStatus_t MQTT_ValidateSubscribeProperties( bool isSubscriptionIdAvailable,
                         status = MQTTBadParameter;
                     }
                 }
-
                 break;
 
             case MQTT_USER_PROPERTY_ID:
@@ -5899,5 +3977,3 @@ MQTTStatus_t MQTT_ValidateSubscribeProperties( bool isSubscriptionIdAvailable,
 
     return status;
 }
-
-/*-----------------------------------------------------------*/

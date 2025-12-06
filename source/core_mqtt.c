@@ -28,9 +28,15 @@
  */
 #include <string.h>
 #include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include "core_mqtt.h"
+#include "core_mqtt_serializer.h"
+#include "transport_interface.h"
 #include "core_mqtt_state.h"
+
+#include "private/core_mqtt_serializer_private.h"
 
 /* Include config defaults header to get default values of configs. */
 #include "core_mqtt_config_defaults.h"
@@ -2702,6 +2708,7 @@ static MQTTStatus_t receiveConnack( MQTTContext_t * pContext,
                                     *pIncomingPacket,
                                     remainingTimeMs );
         }
+        /* TODO: Handle AUTH packets here as well. */
         else
         {
             LogError( ( "Incorrect packet type %X received while expecting"
