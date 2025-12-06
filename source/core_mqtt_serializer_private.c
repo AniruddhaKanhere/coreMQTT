@@ -1,0 +1,366 @@
+/*
+ * coreMQTT <DEVELOPMENT BRANCH>
+ * Copyright (C) 2022 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/**
+ * @file core_mqtt_serializer_private.c
+ * @brief Implements private functions used by serializer and deserializer.
+ */
+#include <string.h>
+#include <assert.h>
+#include <stdbool.h>
+#include <inttypes.h>
+
+#include "core_mqtt_serializer.h"
+#include "private/core_mqtt_serializer_private.h"
+
+/* Include config defaults header to get default values of configs. */
+#include "core_mqtt_config_defaults.h"
+
+/*-----------------------------------------------------------*/
+
+size_t variableLengthEncodedSize( uint32_t length )
+{
+    size_t encodedSize;
+
+    /* Determine how many bytes are needed to encode length.
+     * The values below are taken from the MQTT 5.0 spec. */
+
+    /* 1 byte is needed to encode lengths between 0 and 127. */
+    if( length < 128U )
+    {
+        encodedSize = 1U;
+    }
+    /* 2 bytes are needed to encode lengths between 128 and 16,383. */
+    else if( length < 16384U )
+    {
+        encodedSize = 2U;
+    }
+    /* 3 bytes are needed to encode lengths between 16,384 and 2,097,151. */
+    else if( length < 2097152U )
+    {
+        encodedSize = 3U;
+    }
+    /* 4 bytes are needed to encode lengths between 2,097,152 and 268,435,455. */
+    else
+    {
+        encodedSize = 4U;
+    }
+
+    LogDebug( ( "Encoded size for length %lu is %lu bytes.",
+                ( unsigned long ) length,
+                ( unsigned long ) encodedSize ) );
+
+    return encodedSize;
+}
+
+/*-----------------------------------------------------------*/
+
+uint8_t * encodeString( uint8_t * pDestination,
+                        const char * pSource,
+                        uint16_t sourceLength )
+{
+    uint8_t * pBuffer = NULL;
+
+    assert( pDestination != NULL );
+    assert( pSource != NULL );
+
+    pBuffer = pDestination;
+
+    /* The first byte of a UTF-8 string is the high byte of the string length. */
+    *pBuffer = UINT16_HIGH_BYTE( sourceLength );
+    pBuffer++;
+
+    /* The second byte of a UTF-8 string is the low byte of the string length. */
+    *pBuffer = UINT16_LOW_BYTE( sourceLength );
+    pBuffer++;
+
+    /* Copy the string into pBuffer. */
+    if( pSource != NULL )
+    {
+        ( void ) memcpy( ( void * ) pBuffer, ( const void * ) pSource, sourceLength );
+    }
+
+    /* Return the pointer to the end of the encoded string. */
+    pBuffer = &pBuffer[ sourceLength ];
+
+    return pBuffer;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t decodeUserProp( const char ** pPropertyKey,
+                             uint16_t * pPropertyKeyLen,
+                             const char ** pPropertyValue,
+                             uint16_t * pPropertyValueLen,
+                             uint32_t * pPropertyLength,
+                             uint8_t ** pIndex )
+{
+    MQTTStatus_t status = MQTTSuccess;
+    const char * pKey = NULL;
+    const char * pValue = NULL;
+    uint16_t keyLength = 0U;
+    uint16_t valueLength = 0U;
+    bool used = false;
+
+    /* Decode the user property key using decodeUtf8. */
+    status = decodeUtf8( &pKey, &keyLength, pPropertyLength, &used, pIndex );
+
+    if( status == MQTTSuccess )
+    {
+        used = false;
+        /* Decode the user property value using decodeUtf8. */
+        status = decodeUtf8( &pValue, &valueLength, pPropertyLength, &used, pIndex );
+    }
+
+    if( status == MQTTSuccess )
+    {
+        /* Store the decoded key and value. */
+        *pPropertyKey = pKey;
+        *pPropertyKeyLen = keyLength;
+        *pPropertyValue = pValue;
+        *pPropertyValueLen = valueLength;
+    }
+
+    return status;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t decodeUint32t( uint32_t * pProperty,
+                            uint32_t * pPropertyLength,
+                            bool * pUsed,
+                            uint8_t ** pIndex )
+{
+    uint8_t * pLocalIndex = *pIndex;
+    MQTTStatus_t status = MQTTSuccess;
+
+    /* Protocol error to include the same property twice. */
+    if( *pUsed == true )
+    {
+        status = MQTTBadResponse;
+    }
+    /* Validate the length and decode. */
+    else if( *pPropertyLength < sizeof( uint32_t ) )
+    {
+        status = MQTTBadResponse;
+    }
+    else
+    {
+        if( pProperty != NULL )
+        {
+            *pProperty = UINT32_DECODE( pLocalIndex );
+        }
+        pLocalIndex = &pLocalIndex[ sizeof( uint32_t ) ];
+        *pUsed = true;
+        *pPropertyLength -= sizeof( uint32_t );
+    }
+
+    *pIndex = pLocalIndex;
+    return status;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t decodeUint16t( uint16_t * pProperty,
+                            uint32_t * pPropertyLength,
+                            bool * pUsed,
+                            uint8_t ** pIndex )
+{
+    uint8_t * pLocalIndex = *pIndex;
+    MQTTStatus_t status = MQTTSuccess;
+
+    /* Protocol error to include the same property twice. */
+    if( *pUsed == true )
+    {
+        status = MQTTBadResponse;
+    }
+    /* Validate the length and decode. */
+    else if( *pPropertyLength < sizeof( uint16_t ) )
+    {
+        status = MQTTBadResponse;
+    }
+    else
+    {
+        if( pProperty != NULL )
+        {
+            *pProperty = UINT16_DECODE( pLocalIndex );
+        }
+        pLocalIndex = &pLocalIndex[ sizeof( uint16_t ) ];
+        *pUsed = true;
+        *pPropertyLength -= sizeof( uint16_t );
+    }
+
+    *pIndex = pLocalIndex;
+    return status;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t decodeUint8t( uint8_t * pProperty,
+                           uint32_t * pPropertyLength,
+                           bool * pUsed,
+                           uint8_t ** pIndex )
+{
+    uint8_t * pLocalIndex = *pIndex;
+    MQTTStatus_t status = MQTTSuccess;
+
+    /* Protocol error to include the same property twice. */
+    if( *pUsed == true )
+    {
+        status = MQTTBadResponse;
+    }
+    /* Validate the length and decode. */
+    else if( *pPropertyLength < sizeof( uint8_t ) )
+    {
+        status = MQTTBadResponse;
+    }
+    else
+    {
+        *pProperty = *pLocalIndex;
+        pLocalIndex = &pLocalIndex[ sizeof( uint8_t ) ];
+        *pUsed = true;
+        *pPropertyLength -= sizeof( uint8_t );
+
+        if( *pProperty > 1U )
+        {
+            status = MQTTBadResponse;
+        }
+    }
+
+    *pIndex = pLocalIndex;
+    return status;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t decodeUtf8( const char ** pProperty,
+                         uint16_t * pLength,
+                         uint32_t * pPropertyLength,
+                         bool * pUsed,
+                         uint8_t ** pIndex )
+{
+    uint8_t * pLocalIndex = *pIndex;
+    MQTTStatus_t status = MQTTSuccess;
+
+    /* Protocol error to include the same property twice. */
+    if( *pUsed == true )
+    {
+        status = MQTTBadResponse;
+    }
+    /* Validate the length and decode. */
+    else if( *pPropertyLength < sizeof( uint16_t ) )
+    {
+        status = MQTTBadResponse;
+    }
+    else
+    {
+        *pLength = UINT16_DECODE( pLocalIndex );
+        pLocalIndex = &pLocalIndex[ sizeof( uint16_t ) ];
+        *pPropertyLength -= sizeof( uint16_t );
+
+        if( *pPropertyLength < *pLength )
+        {
+            status = MQTTBadResponse;
+        }
+        else
+        {
+            *pProperty = ( const char * ) pLocalIndex;
+            pLocalIndex = &pLocalIndex[ *pLength ];
+            *pPropertyLength -= *pLength;
+            *pUsed = true;
+        }
+    }
+
+    *pIndex = pLocalIndex;
+    return status;
+}
+
+/*-----------------------------------------------------------*/
+
+MQTTStatus_t decodeVariableLength( const uint8_t * pBuffer,
+                                   size_t bufferLength,
+                                   uint32_t * pLength )
+{
+    uint32_t remainingLength = 0;
+    uint32_t multiplier = 1;
+    size_t bytesDecoded = 0;
+    uint8_t encodedByte = 0;
+    size_t localBufferLength = bufferLength;
+    MQTTStatus_t status = MQTTSuccess;
+
+    /* This algorithm is copied from the MQTT 5.0 spec. */
+    do
+    {
+        if( multiplier > 2097152U ) /* 128 ^ 3 */
+        {
+            LogError( ( "Invalid remaining length in the packet.\n" ) );
+            remainingLength = MQTT_REMAINING_LENGTH_INVALID;
+            status = MQTTBadResponse;
+        }
+        else
+        {
+            if( localBufferLength > 0U )
+            {
+                encodedByte = pBuffer[ bytesDecoded ];
+                remainingLength += ( ( size_t ) encodedByte & 0x7FU ) * multiplier;
+                multiplier *= 128U;
+                bytesDecoded++;
+                localBufferLength--;
+            }
+            else
+            {
+                status = MQTTBadResponse;
+            }
+        }
+
+        /* If the response is incorrect then break out
+         * of the loop. */
+        if( ( remainingLength >= MQTT_REMAINING_LENGTH_INVALID ) ||
+            ( status != MQTTSuccess ) )
+        {
+            status = MQTTBadResponse;
+            break;
+        }
+    } while( ( encodedByte & 0x80U ) != 0U );
+
+    if( status == MQTTSuccess )
+    {
+        /* Check that the decoded remaining length conforms to the MQTT specification. */
+        size_t expectedSize = variableLengthEncodedSize( remainingLength );
+
+        if( bytesDecoded != expectedSize )
+        {
+            LogError( ( "Expected and actual length of decoded bytes do not match.\n" ) );
+            status = MQTTBadResponse;
+        }
+        else
+        {
+            *pLength = remainingLength;
+        }
+    }
+
+    return status;
+}
+
+/*-----------------------------------------------------------*/
