@@ -427,6 +427,12 @@ typedef struct MQTTPublishInfo
      * @brief Message payload length.
      */
     size_t payloadLength;
+
+     /**
+     * @brief Length of the properties.
+     */
+    uint32_t propertyLength;
+
 } MQTTPublishInfo_t;
 
 /**
@@ -1122,18 +1128,18 @@ MQTTStatus_t MQTT_SerializeUnsubscribe( const MQTTSubscribeInfo_t * pSubscriptio
 /**
  * @brief Get the packet size and remaining length of an MQTT PUBLISH packet.
  *
- * This function must be called before #MQTT_SerializePublish in order to get
- * the size of the MQTT PUBLISH packet that is generated from #MQTTPublishInfo_t.
- * The size of the #MQTTFixedBuffer_t supplied to #MQTT_SerializePublish must be
- * at least @p pPacketSize. The provided @p pPublishInfo is valid for
- * serialization with #MQTT_SerializePublish only if this function returns
- * #MQTTSuccess. The remaining length returned in @p pRemainingLength and the
+ * #MQTT_ValidatePublishParams should be called with @p pPublishInfo before invoking this function
+ * to validate the publish parameters. This function must be called before #sendPublishWithoutCopy
+ * in order to get the size of the MQTT PUBLISH packet that is generated from #MQTTPublishInfo_t
+ * and optional publish properties. The remaining length returned in @p pRemainingLength and the
  * packet size returned in @p pPacketSize are valid only if this function
  * returns #MQTTSuccess.
  *
  * @param[in] pPublishInfo MQTT PUBLISH packet parameters.
+ * @param[in] pPublishProperties MQTT PUBLISH properties builder. Pass NULL if not used.
  * @param[out] pRemainingLength The Remaining Length of the MQTT PUBLISH packet.
  * @param[out] pPacketSize The total size of the MQTT PUBLISH packet.
+ * @param[in] maxPacketSize Maximum packet size allowed by the server.
  *
  * @return #MQTTBadParameter if the packet would exceed the size allowed by the
  * MQTT spec or if invalid parameters are passed; #MQTTSuccess otherwise.
@@ -1144,6 +1150,10 @@ MQTTStatus_t MQTT_SerializeUnsubscribe( const MQTTSubscribeInfo_t * pSubscriptio
  * // Variables used in this example.
  * MQTTStatus_t status;
  * MQTTPublishInfo_t publishInfo = { 0 };
+ * MQTTPropBuilder_t publishProperties = { 0 };
+ * uint16_t topicAliasMax;
+ * uint8_t retainAvailable;
+ * uint8_t maxQos;
  * size_t remainingLength = 0, packetSize = 0;
  *
  * // Initialize the publish info.
@@ -1153,22 +1163,33 @@ MQTTStatus_t MQTT_SerializeUnsubscribe( const MQTTSubscribeInfo_t * pSubscriptio
  * publishInfo.pPayload = "Hello World!";
  * publishInfo.payloadLength = strlen( "Hello World!" );
  *
+ * // Initialize publish properties (if needed)
+ * initializePublishProperties( &publishProperties );
+ *
+ * // Validate publish parameters
+ * status = MQTT_ValidatePublishParams(&publishInfo, topicAliasMax, retainAvailable, maxQos);
+ *
  * // Get the size requirement for the publish packet.
  * status = MQTT_GetPublishPacketSize(
- *      &publishInfo, &remainingLength, &packetSize
+ *      &publishInfo,
+ *      &publishProperties,
+ *      &remainingLength,
+ *      &packetSize,
+ *      maxPacketSize
  * );
  *
  * if( status == MQTTSuccess )
  * {
- *      // The application should allocate or use a static #MQTTFixedBuffer_t
- *      // of size >= packetSize to serialize the publish.
+ *      // The publish packet can now be sent to the broker.
  * }
  * @endcode
  */
 /* @[declare_mqtt_getpublishpacketsize] */
 MQTTStatus_t MQTT_GetPublishPacketSize( const MQTTPublishInfo_t * pPublishInfo,
+                                        const MQTTPropBuilder_t * pPublishProperties,
                                         size_t * pRemainingLength,
-                                        size_t * pPacketSize );
+                                        size_t * pPacketSize,
+                                        uint32_t maxPacketSize);
 /* @[declare_mqtt_getpublishpacketsize] */
 
 /**
@@ -1530,8 +1551,14 @@ MQTTStatus_t MQTT_SerializePingreq( const MQTTFixedBuffer_t * pFixedBuffer );
  * @param[in] pIncomingPacket #MQTTPacketInfo_t containing the buffer.
  * @param[out] pPacketId The packet ID obtained from the buffer.
  * @param[out] pPublishInfo Struct containing information about the publish.
+ * @param[in] propBuffer Buffer to hold the properties.
+ * @param[in] maxPacketSize Maximum packet size.
+ * @param[in] topicAliasMax Maximum topic alias specified in the CONNECT packet.
  *
- * @return #MQTTBadParameter, #MQTTBadResponse, or #MQTTSuccess.
+ * @return
+ * - #MQTTBadParameter if invalid parameters are passed
+ * - #MQTTBadResponse if invalid packet is read
+ * - #MQTTSuccess otherwise.
  *
  * <b>Example</b>
  * @code{c}
@@ -1549,7 +1576,10 @@ MQTTStatus_t MQTT_SerializePingreq( const MQTTFixedBuffer_t * pFixedBuffer );
  * MQTTStatus_t status;
  * MQTTPacketInfo_t incomingPacket;
  * MQTTPublishInfo_t publishInfo = { 0 };
+ * MQTTPropBuilder_t propBuffer ;
  * uint16_t packetId;
+ * uint32_t maxPacketSize = pContext->connectionProperties.maxPacketSize;
+ * uint16_t topicAliasMax = pContext->connectionProperties.topicAliasMax;
  *
  * int32_t bytesRecvd;
  * // A buffer to hold remaining data of the incoming packet.
@@ -1573,7 +1603,8 @@ MQTTStatus_t MQTT_SerializePingreq( const MQTTFixedBuffer_t * pFixedBuffer );
  * // Deserialize the publish information if the incoming packet is a publish.
  * if( ( incomingPacket.type & 0xF0 ) == MQTT_PACKET_TYPE_PUBLISH )
  * {
- *      status = MQTT_DeserializePublish( &incomingPacket, &packetId, &publishInfo );
+ *      status = MQTT_DeserializePublish( &incomingPacket, &packetId, &publishInfo,
+ *                                        &propBuffer, maxPacketSize, topicAliasMax );
  *      if( status == MQTTSuccess )
  *      {
  *          // The deserialized publish information can now be used from `publishInfo`.
@@ -1582,9 +1613,12 @@ MQTTStatus_t MQTT_SerializePingreq( const MQTTFixedBuffer_t * pFixedBuffer );
  * @endcode
  */
 /* @[declare_mqtt_deserializepublish] */
-MQTTStatus_t MQTT_DeserializePublish( const MQTTPacketInfo_t * pIncomingPacket,
-                                      uint16_t * pPacketId,
-                                      MQTTPublishInfo_t * pPublishInfo );
+MQTTStatus_t MQTT_DeserializePublish( const MQTTPacketInfo_t* pIncomingPacket,
+                                      uint16_t* pPacketId,
+                                      MQTTPublishInfo_t* pPublishInfo,
+                                      MQTTPropBuilder_t* propBuffer,
+                                      uint32_t maxPacketSize,
+                                      uint16_t topicAliasMax );
 /* @[declare_mqtt_deserializepublish] */
 
 /**
@@ -2729,7 +2763,7 @@ MQTTStatus_t MQTTPropGet_CorrelationData( MQTTPropBuilder_t * pPropertyBuilder,
  * @return #MQTTSuccess if property is retrieved successfully;
  * #MQTTBadParameter if invalid parameters are passed.
  */
-MQTTStatus_t MQTTPropGet_PubSubscriptionId( MQTTPropBuilder_t * pPropertyBuilder,
+MQTTStatus_t MQTTPropGet_SubscriptionId( MQTTPropBuilder_t * pPropertyBuilder,
                                             uint32_t * currentIndex,
                                             uint32_t * pSubscriptionId );
 
@@ -2749,6 +2783,124 @@ MQTTStatus_t MQTTPropGet_PubContentType( MQTTPropBuilder_t * pPropertyBuilder,
                                          const char ** pContentType,
                                          uint16_t * pContentTypeLength );
 
+/**
+ * @brief Validates the properties of a PUBLISH packet.
+ *
+ * This function validates the properties in the property builder for a PUBLISH packet.
+ *
+ * @param[in]  serverTopicAliasMax  Maximum topic alias value allowed by the server.
+ * @param[in]  propBuilder          Pointer to the property builder structure.
+ * @param[out] topicAlias          Pointer to store the topic alias value if present.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess if the properties are valid
+ * - #MQTTBadParameter if invalid parameters are passed
+ * - #MQTTBadResponse if an invalid packet is read
+ */
+/* @[declare_mqtt_validatepublishproperties] */
+MQTTStatus_t MQTT_ValidatePublishProperties(uint16_t serverTopicAliasMax, const MQTTPropBuilder_t* propBuilder, uint16_t *topicAlias);
+/* @[declare_mqtt_validatepublishproperties] */
+
+/**
+ * @brief Validate the publish parameters present in the given publish structure @p pPublishInfo.
+ *
+ * This function must be called before #MQTT_GetPublishPacketSize in order to validate the publish parameters.
+ *
+ * @param[in] pPublishInfo MQTT publish packet parameters.
+ * @param[in] retainAvailable Whether server allows retain or not.
+ * @param[in] maxQos Maximum QoS supported by the server.
+ * @param[in] topicAlias  Topic alias in the PUBLISH packet.
+ * @param[in] maxPacketSize Maximum packet size allowed by the server.
+ *
+ * @return  #MQTTBadParameter if invalid parameters are passed;
+ * #MQTTSuccess otherwise.
+ *
+ * <b>Example</b>
+ * @code{c}
+ *
+ * // Variables used in this example.
+ * MQTTStatus_t status;
+ * MQTTPublishInfo_t publishInfo = {0};
+ * uint16_t topicAlias;
+ * uint8_t retainAvailable;
+ * uint8_t maxQos;
+ * // Set in the CONNACK packet.
+ * uint32_t maxPacketSize ;
+ *
+ * //Set the publish info parameters.
+ *
+ * //Validate the publish packet
+ * status = MQTT_ValidatePublishParams(&publishInfo, retainAvailable, maxQos, topicAlias, maxPacketSize);
+ *
+ * if( status == MQTTSuccess )
+ * {
+ *      // Get the packet size and serialize the publish packet.
+ * }
+ * @endcode
+ */
+/* @[declare_mqtt_validatepublishparams] */
+MQTTStatus_t MQTT_ValidatePublishParams(const MQTTPublishInfo_t* pPublishInfo,
+                                        uint8_t retainAvailable,
+                                        uint8_t maxQos,
+                                        uint16_t topicAlias,
+                                        uint32_t maxPacketSize);
+/* @[declare_mqtt_validatepublishparams] */
+
+/**
+ * @brief Validates the properties specified for an MQTT PUBLISH ACK packet.
+ *
+ * @param[in] pPropertyBuilder Pointer to the property builder structure containing unsubscribe properties.
+ *
+ * @return Returns one of the following:
+ * - #MQTTSuccess , #MQTTBadParameter or #MQTTBadResponse.
+ */
+/* @[declare_mqtt_validatepublishackproperties] */
+MQTTStatus_t MQTT_ValidatePublishAckProperties( const MQTTPropBuilder_t * pPropertyBuilder );
+/* @[declare_mqtt_validatepublishackproperties] */
+
+/**
+ * @brief Get the size of an outgoing PUBLISH ACK packet.
+ *
+ * @note If no reason code is sent and property length is zero then #MQTT_SerializeAck can be used directly.
+ *
+ * @param[out]  pRemainingLength The remaining length of the packet to be serialized.
+ * @param[out]  pPacketSize The size of the packet to be serialized.
+ * @param[in]  maxPacketSize Maximum packet size allowed by the server.
+ * @param[in]  ackPropertyLength The length of the properties.
+ *
+ * @return #MQTTBadParameter if invalid parameters are passed;
+ * #MQTTSuccess otherwise.
+ *
+ * <b>Example</b>
+ * @code{c}
+ *
+ * // Variables used in this example.
+ * MQTTStatus_t status;
+ * MQTTFixedBuffer_t fixedBuffer;
+ * uint8_t buffer[ BUFFER_SIZE ];
+ * MQTTAckInfo_t  ackInfo;
+ * uint16_t sessionExpiry;
+ *
+ * fixedBuffer.pBuffer = buffer;
+ * fixedBuffer.size = BUFFER_SIZE;
+ * // Variables used in this example.
+ * MQTTStatus_t status;
+ * size_t remainingLength =0;
+ * size_t packetSize = 0;
+ * size_t ackPropertyLength = 0;
+ * uint32_t maxPacketSize;
+ * //set the parameters.
+ * // Get the size requirement for the ack packet.
+ * status = MQTT_GetAckPacketSize(&remainingLength,&packetSize,maxPacketSize, ackPropertyLength);
+ * }
+ * @endcode
+ */
+/* @[declare_mqtt_getackpacketsize] */
+MQTTStatus_t MQTT_GetAckPacketSize(size_t* pRemainingLength,
+    size_t* pPacketSize,
+    uint32_t maxPacketSize,
+    size_t ackPropertyLength);
+/* @[declare_mqtt_getackpacketsize] */
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus

@@ -364,3 +364,28 @@ MQTTStatus_t decodeVariableLength( const uint8_t * pBuffer,
 }
 
 /*-----------------------------------------------------------*/
+
+uint8_t * serializeAckFixed( uint8_t * pIndex,
+                             uint8_t packetType,
+                             uint16_t packetId,
+                             size_t remainingLength,
+                             MQTTSuccessFailReasonCode_t reasonCode )
+{
+    uint8_t * pIndexLocal = pIndex;
+
+    /* The first byte in the publish ack packet is the control packet type. */
+    *pIndexLocal = packetType;
+    pIndexLocal++;
+    /*After the packet type fixed header has remaining length.*/
+    pIndexLocal = encodeVariableLength( pIndexLocal, remainingLength );
+    /*Encode the packet id.*/
+    pIndexLocal[ 0 ] = UINT16_HIGH_BYTE( packetId );
+    pIndexLocal[ 1 ] = UINT16_LOW_BYTE( packetId );
+    pIndexLocal = &pIndexLocal[ 2 ];
+    /*We are now sending the ack.*/
+    *pIndexLocal = ( uint8_t ) reasonCode;
+    pIndexLocal++;
+    return pIndexLocal;
+}
+
+/*-----------------------------------------------------------*/
