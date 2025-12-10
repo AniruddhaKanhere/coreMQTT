@@ -278,7 +278,7 @@ MQTTStatus_t MQTT_GetNextPropertyType( MQTTPropBuilder_t * pPropertyBuilder,
 
     if( status != MQTTSuccess )
     {
-        LogError( ( "Property type is invalid." ) );
+        /* Do nothing. checkPropBuilderParams will log the warning/error. */
     }
     else if( property == NULL )
     {

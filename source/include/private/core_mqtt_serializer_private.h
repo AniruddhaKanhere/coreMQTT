@@ -406,4 +406,23 @@ MQTTStatus_t decodeUtf8( const char ** pProperty,
 MQTTStatus_t decodeVariableLength( const uint8_t * pBuffer,
                                    size_t bufferLength,
                                    uint32_t * pLength );
+
+/**
+ * @brief Serialize the fixed size part of the ack packet header.
+ *
+ * @param[out] pIndex Pointer to the buffer where the header is to
+ * be serialized.
+ * @param[in] packetType Type of publish ack
+ * @param[in] packetId Packed identifier of the ack packet.
+ * @param[in] remainingLength Remaining length of the ack packet.
+ * @param[in] reasonCode Reason code for the ack packet.
+ *
+ * @return A pointer to the end of the encoded string.
+ */
+uint8_t * serializeAckFixed( uint8_t* pIndex,
+                             uint8_t packetType,
+                             uint16_t packetId,
+                             size_t remainingLength,
+                             MQTTSuccessFailReasonCode_t reasonCode );
+
 #endif
