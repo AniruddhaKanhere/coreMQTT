@@ -32,7 +32,6 @@
 #include <inttypes.h>
 
 #include "core_mqtt_serializer.h"
-#include "transport_interface.h"
 
 #include "private/core_mqtt_serializer_private.h"
 
