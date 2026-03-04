@@ -31,9 +31,9 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">coreMQTT<span id="projectnumber">&#160;v2.3.1+</span>
+   <div id="projectname">coreMQTT<span id="projectnumber">&#160;v5.0.0+</span>
    </div>
-   <div id="projectbrief">MQTT 3.1.1 Client Library</div>
+   <div id="projectbrief">MQTT 5.0 Client Library</div>
   </td>
     <td>        <div id="MSearchBox" class="MSearchBoxInactive">
         <span class="left">
@@ -171,6 +171,10 @@ Macros</h2></td></tr>
 #define&#160;</td><td class="memItemRight" valign="bottom"><b>MQTT_PACKET_TYPE_DISCONNECT</b>&#160;&#160;&#160;( ( uint8_t ) 0xE0U )</td></tr>
 <tr class="memdesc:gaed07155a3d6fa4b7624b9f36ed33ec6d"><td class="mdescLeft">&#160;</td><td class="mdescRight">DISCONNECT (client-to-server). <br /></td></tr>
 <tr class="separator:gaed07155a3d6fa4b7624b9f36ed33ec6d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga14ad742747e745fea71a20ae587db704"><td class="memItemLeft" align="right" valign="top"><a id="ga14ad742747e745fea71a20ae587db704" name="ga14ad742747e745fea71a20ae587db704"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MQTT_PACKET_TYPE_AUTH</b>&#160;&#160;&#160;( ( uint8_t ) 0xF0U )</td></tr>
+<tr class="memdesc:ga14ad742747e745fea71a20ae587db704"><td class="mdescLeft">&#160;</td><td class="mdescRight">AUTH (bidirectional). <br /></td></tr>
+<tr class="separator:ga14ad742747e745fea71a20ae587db704"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ga26994fcfacb1cff892caa45ec31ca7c6"><td class="memItemLeft" align="right" valign="top"><a id="ga26994fcfacb1cff892caa45ec31ca7c6" name="ga26994fcfacb1cff892caa45ec31ca7c6"></a>
 #define&#160;</td><td class="memItemRight" valign="bottom"><b>MQTT_PUBLISH_ACK_PACKET_SIZE</b>&#160;&#160;&#160;( 4UL )</td></tr>
 <tr class="memdesc:ga26994fcfacb1cff892caa45ec31ca7c6"><td class="mdescLeft">&#160;</td><td class="mdescRight">The size of MQTT PUBACK, PUBREC, PUBREL, and PUBCOMP packets, per MQTT spec. <br /></td></tr>
@@ -196,7 +200,7 @@ Macros</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Invalid packet identifier. </p>
-<p>Zero is an invalid packet identifier as per MQTT v3.1.1 spec. </p>
+<p>Zero is an invalid packet identifier as per MQTT 5.0 spec. </p>
 
 </div>
 </div>

@@ -16,6 +16,7 @@ var group__mqtt__constants =
     [ "MQTT_PACKET_TYPE_PINGREQ", "group__mqtt__constants.html#gacbe28c7d081275d1805c2142ff792185", null ],
     [ "MQTT_PACKET_TYPE_PINGRESP", "group__mqtt__constants.html#ga285fc02048e2482794042fa98639e514", null ],
     [ "MQTT_PACKET_TYPE_DISCONNECT", "group__mqtt__constants.html#gaed07155a3d6fa4b7624b9f36ed33ec6d", null ],
+    [ "MQTT_PACKET_TYPE_AUTH", "group__mqtt__constants.html#ga14ad742747e745fea71a20ae587db704", null ],
     [ "MQTT_PUBLISH_ACK_PACKET_SIZE", "group__mqtt__constants.html#ga26994fcfacb1cff892caa45ec31ca7c6", null ],
     [ "MQTT_STATE_CURSOR_INITIALIZER", "group__mqtt__constants.html#ga666ad78e7eaaffa51f5cab96201a9476", null ]
 ];

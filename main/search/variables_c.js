@@ -1,7 +1,5 @@
 var searchData=
 [
-  ['recv_0',['recv',['../struct_transport_interface__t.html#a7c34e9b865e2a509306f09c7dfa3699e',1,'TransportInterface_t']]],
-  ['remaininglength_1',['remainingLength',['../struct_m_q_t_t_packet_info__t.html#a7c85becf08de0ec9776dd4be1fcc4bf8',1,'MQTTPacketInfo_t']]],
-  ['retain_2',['retain',['../struct_m_q_t_t_publish_info__t.html#a343b0af89c46a900db4aa5c775a0975a',1,'MQTTPublishInfo_t']]],
-  ['retrievefunction_3',['retrieveFunction',['../struct_m_q_t_t_context__t.html#a270e9e595ecd60948c960d059f8fe718',1,'MQTTContext_t']]]
+  ['outgoingpublishrecordmaxcount_0',['outgoingPublishRecordMaxCount',['../struct_m_q_t_t_context__t.html#a2851073e252d1e744596272ef13dd14a',1,'MQTTContext_t']]],
+  ['outgoingpublishrecords_1',['outgoingPublishRecords',['../struct_m_q_t_t_context__t.html#a4ea1e37e0e81f010fbf84365ac2ef6de',1,'MQTTContext_t']]]
 ];

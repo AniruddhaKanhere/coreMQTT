@@ -31,9 +31,9 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">coreMQTT<span id="projectnumber">&#160;v2.3.1+</span>
+   <div id="projectname">coreMQTT<span id="projectnumber">&#160;v5.0.0+</span>
    </div>
-   <div id="projectbrief">MQTT 3.1.1 Client Library</div>
+   <div id="projectbrief">MQTT 5.0 Client Library</div>
   </td>
     <td>        <div id="MSearchBox" class="MSearchBoxInactive">
         <span class="left">
@@ -148,7 +148,7 @@ Time Function</h1>
 <p>The MQTT library relies on a function to generate millisecond timestamps, for the purpose of calculating durations and timeouts, as well as maintaining the keep-alive mechanism of the MQTT protocol.</p>
 <dl class="section see"><dt>See also</dt><dd><a class="el" href="group__mqtt__callback__types.html#gae3bea55b0e49e5208b8c5709a5ea23aa">MQTTGetCurrentTimeFunc_t</a></dd></dl>
 <p>Platforms must supply a function capable of generating 32 bit timestamps of millisecond resolution. These timestamps need not correspond with any real world clock; the only requirement is that the difference between two timestamps must be an accurate representation of the duration between them, in milliseconds.</p>
-<dl class="section note"><dt>Note</dt><dd>Should the platform be incapable of providing millisecond timestamps, the port may instead provide a function that always returns 0, or a strictly non-decreasing sequence. In this case, the timeout values in all library calls to <a class="el" href="core__mqtt_8h.html#aed1e4dc123a8ba79ac569cb17c69bfa0">MQTT_Connect</a>, <a class="el" href="core__mqtt_8h.html#ab95d3d6b3eed98a6184fb2018c5b55d7">MQTT_ProcessLoop</a>, or <a class="el" href="core__mqtt_8h.html#aeb7c37284fcf6f68eb577427a6763fc6">MQTT_ReceiveLoop</a> MUST be set to 0, resulting in loop functions running for a single iteration, and <a class="el" href="core__mqtt_8h.html#aed1e4dc123a8ba79ac569cb17c69bfa0">MQTT_Connect</a> relying on <a class="el" href="core_mqtt_config.html#MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT">MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT</a> to receive the CONNACK packet. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Should the platform be incapable of providing millisecond timestamps, the port may instead provide a function that always returns 0, or a strictly non-decreasing sequence. In this case, the timeout values in all library calls to <a class="el" href="core__mqtt_8h.html#a454a3ec3559a26e007a76f0efeb25c4b">MQTT_Connect</a>, <a class="el" href="core__mqtt_8h.html#ab95d3d6b3eed98a6184fb2018c5b55d7">MQTT_ProcessLoop</a>, or <a class="el" href="core__mqtt_8h.html#aeb7c37284fcf6f68eb577427a6763fc6">MQTT_ReceiveLoop</a> MUST be set to 0, resulting in loop functions running for a single iteration, and <a class="el" href="core__mqtt_8h.html#a454a3ec3559a26e007a76f0efeb25c4b">MQTT_Connect</a> relying on <a class="el" href="core_mqtt_config.html#MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT">MQTT_MAX_CONNACK_RECEIVE_RETRY_COUNT</a> to receive the CONNACK packet. </dd></dl>
 </div></div><!-- contents -->
 </div><!-- PageDoc -->
 </div><!-- doc-content -->
