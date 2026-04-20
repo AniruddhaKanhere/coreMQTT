@@ -440,6 +440,13 @@
       <arglist>(const MQTTPacketInfo_t *pSubackPacket, uint8_t **pPayloadStart, size_t *pPayloadSize)</arglist>
     </member>
     <member kind="function">
+      <type>MQTTStatus_t</type>
+      <name>MQTT_GetUnsubAckStatusCodes</name>
+      <anchorfile>core__mqtt_8c.html</anchorfile>
+      <anchor>a39ba0dd15645aad267b65494ca91bea1</anchor>
+      <arglist>(const MQTTPacketInfo_t *pUnsubackPacket, uint8_t **pPayloadStart, size_t *pPayloadSize)</arglist>
+    </member>
+    <member kind="function">
       <type>const char *</type>
       <name>MQTT_Status_strerror</name>
       <anchorfile>core__mqtt_8c.html</anchorfile>
@@ -2052,6 +2059,13 @@
       <arglist>(const MQTTPacketInfo_t *pSubackPacket, uint8_t **pPayloadStart, size_t *pPayloadSize)</arglist>
     </member>
     <member kind="function">
+      <type>MQTTStatus_t</type>
+      <name>MQTT_GetUnsubAckStatusCodes</name>
+      <anchorfile>core__mqtt_8h.html</anchorfile>
+      <anchor>a39ba0dd15645aad267b65494ca91bea1</anchor>
+      <arglist>(const MQTTPacketInfo_t *pUnsubackPacket, uint8_t **pPayloadStart, size_t *pPayloadSize)</arglist>
+    </member>
+    <member kind="function">
       <type>const char *</type>
       <name>MQTT_Status_strerror</name>
       <anchorfile>core__mqtt_8h.html</anchorfile>
@@ -2293,6 +2307,48 @@
       <name>MQTT_PACKET_TYPE_AUTH</name>
       <anchorfile>group__mqtt__constants.html</anchorfile>
       <anchor>ga14ad742747e745fea71a20ae587db704</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_CONNECT</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga7178dd142bbe3d73fd3b5318d45d15ac</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_PUBLISH</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga7f1a2f553770edad240e7d00e4dba4b5</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_SUBSCRIBE</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>gad829d5056991b57bda8790844acf0261</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_UNSUBSCRIBE</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga29f7f8b5f55a3231ca836834af5f70c6</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_DISCONNECT</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga7028680383cf0b6bb0c8beecd977e9c8</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_NO_VALIDATE</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga338adb276ce6338f17c7d6a513533933</anchor>
       <arglist></arglist>
     </member>
     <member kind="define">
@@ -3839,6 +3895,41 @@
       <anchorfile>core__mqtt__serializer_8h.html</anchorfile>
       <anchor>a73f6ec7ed9e222865a35cdd6d03ea9ae</anchor>
       <arglist>(const MQTTPacketInfo_t *pPacket, uint32_t maxPacketSize, MQTTReasonCodeInfo_t *pDisconnectInfo, MQTTPropBuilder_t *pPropBuffer)</arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_CONNECT_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga9436a90d8a7d4d11f7c4f663c6709e6f</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_PUBLISH_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>gadc4953a4727ab10c3207fdb210baadb0</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_SUBSCRIBE_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga53e0f4eed48d43e774f88158c9492285</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_UNSUBSCRIBE_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga5d2e37fa177353de06223e01a95b73b8</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_DISCONNECT_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga67861726887c5062b2c89386f84ae3fe</anchor>
+      <arglist></arglist>
     </member>
   </compound>
   <compound kind="file">
@@ -6246,6 +6337,48 @@
     </member>
     <member kind="define">
       <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_CONNECT</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga7178dd142bbe3d73fd3b5318d45d15ac</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_PUBLISH</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga7f1a2f553770edad240e7d00e4dba4b5</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_SUBSCRIBE</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>gad829d5056991b57bda8790844acf0261</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_UNSUBSCRIBE</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga29f7f8b5f55a3231ca836834af5f70c6</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_VALIDATE_DISCONNECT</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga7028680383cf0b6bb0c8beecd977e9c8</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
+      <name>MQTT_PROP_NO_VALIDATE</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga338adb276ce6338f17c7d6a513533933</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="define">
+      <type>#define</type>
       <name>MQTT_PUBLISH_ACK_PACKET_SIZE</name>
       <anchorfile>group__mqtt__constants.html</anchorfile>
       <anchor>ga26994fcfacb1cff892caa45ec31ca7c6</anchor>
@@ -6256,6 +6389,41 @@
       <name>MQTT_STATE_CURSOR_INITIALIZER</name>
       <anchorfile>group__mqtt__constants.html</anchorfile>
       <anchor>ga666ad78e7eaaffa51f5cab96201a9476</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_CONNECT_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga9436a90d8a7d4d11f7c4f663c6709e6f</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_PUBLISH_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>gadc4953a4727ab10c3207fdb210baadb0</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_SUBSCRIBE_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga53e0f4eed48d43e774f88158c9492285</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_UNSUBSCRIBE_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga5d2e37fa177353de06223e01a95b73b8</anchor>
+      <arglist></arglist>
+    </member>
+    <member kind="variable" static="yes">
+      <type>static const uint8_t</type>
+      <name>MQTT_PACKET_TYPE_DISCONNECT_VAL</name>
+      <anchorfile>group__mqtt__constants.html</anchorfile>
+      <anchor>ga67861726887c5062b2c89386f84ae3fe</anchor>
       <arglist></arglist>
     </member>
   </compound>

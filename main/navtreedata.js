@@ -73,7 +73,7 @@ var NAVTREE =
 var NAVTREEINDEX =
 [
 "_m_q_t_t_prop_get_contenttype_function.html",
-"mqtt_serializepublishheader_function.html"
+"mqtt_primaryfunctions.html"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronisation';

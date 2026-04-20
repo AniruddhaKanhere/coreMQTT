@@ -1,5 +1,16 @@
 var NAVTREEINDEX1 =
 {
+"mqtt_primaryfunctions.html":[3,0],
+"mqtt_processloop_function.html":[3,0,9],
+"mqtt_propertyaddfunctions.html":[3,2],
+"mqtt_propertygetfunctions.html":[3,3],
+"mqtt_publish_function.html":[3,0,5],
+"mqtt_publishtoresend_function.html":[3,0,14],
+"mqtt_receiveloop_function.html":[3,0,10],
+"mqtt_serializeack_function.html":[3,1,14],
+"mqtt_serializeconnect_function.html":[3,1,2],
+"mqtt_serializepingreq_function.html":[3,1,18],
+"mqtt_serializepublish_function.html":[3,1,9],
 "mqtt_serializepublishheader_function.html":[3,1,10],
 "mqtt_serializepublishheaderwithouttopic_function.html":[3,1,11],
 "mqtt_serializerfunctions.html":[3,1],
