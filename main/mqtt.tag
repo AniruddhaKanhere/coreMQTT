@@ -2191,6 +2191,11 @@
     </member>
   </compound>
   <compound kind="file">
+    <name>core_mqtt_config_template.h</name>
+    <path>source/include/</path>
+    <filename>core__mqtt__config__template_8h.html</filename>
+  </compound>
+  <compound kind="file">
     <name>core_mqtt_serializer.h</name>
     <path>source/include/</path>
     <filename>core__mqtt__serializer_8h.html</filename>
